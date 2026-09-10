@@ -57,7 +57,7 @@ import {
   POPULAR_LANGUAGES,
   getEffectiveLanguage,
 } from './utils/flags';
-import { dbService, initDatabase, PermissionScope } from './db/database';
+import { dbService, initDatabase, PermissionScope, BufferedMessageItem } from './db/database';
 import {
   createModernTranslationEmbed,
   createLiveThreadMessageEmbed,
@@ -196,57 +196,105 @@ async function deliverBufferedMessagesToThread(
   threadId: string,
   discordId: string,
   channelId?: string
-): Promise<void> {
+): Promise<number> {
   const buffered = dbService.getBufferedMessages(discordId, channelId);
-  if (buffered.length === 0) return;
+  if (buffered.length === 0) return 0;
 
   dbService.clearBufferedMessages(discordId, channelId);
 
   const thread = (await client.channels.fetch(threadId).catch(() => null)) as ThreadChannel | null;
-  if (!thread || !thread.isThread()) return;
+  if (!thread || !thread.isThread()) return 0;
 
   const prefs = dbService.getUserPreferences(discordId);
 
   const byChannel = new Map<
     string,
-    { channelName: string; items: BatchedMessageItem[]; latestUrl: string }
+    { channelName: string; rawItems: BufferedMessageItem[]; latestUrl: string }
   >();
   for (const m of buffered) {
     let entry = byChannel.get(m.channel_id);
     if (!entry) {
-      entry = { channelName: m.channel_name, items: [], latestUrl: m.url };
+      entry = { channelName: m.channel_name, rawItems: [], latestUrl: m.url };
       byChannel.set(m.channel_id, entry);
     }
-    entry.items.push({
-      authorName: m.author_name,
-      authorAvatar: m.author_avatar,
-      translatedText: m.translated_text,
-      originalText: m.original_text,
-    });
+    entry.rawItems.push(m);
     entry.latestUrl = m.url;
   }
 
+  let totalDelivered = 0;
+
   for (const [chanId, group] of byChannel.entries()) {
-    const embed = createBatchedChannelEmbed({
-      channelName: group.channelName,
-      targetLanguage: prefs.target_language,
-      items: group.items,
-      showOriginal: prefs.show_original === 1,
-    });
+    const validItems: BatchedMessageItem[] = [];
 
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`livethread_mute:${chanId}`)
-        .setLabel(`Mute #${group.channelName}`)
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setLabel('Jump to Message ↗')
-        .setStyle(ButtonStyle.Link)
-        .setURL(group.latestUrl)
-    );
+    for (const item of group.rawItems) {
+      let translated = item.translated_text;
+      if (!translated || translated.trim().length === 0) {
+        try {
+          if (prefs.preferred_engine === 'deepl') {
+            translated = await translationService.translateWithDeepL(
+              item.original_text,
+              prefs.target_language
+            );
+          } else {
+            translated = await translationService.translateWithGoogle(
+              item.original_text,
+              prefs.target_language
+            );
+          }
+        } catch (err) {
+          console.error('On-demand translation error:', err);
+          translated = item.original_text;
+        }
+      }
 
-    await thread.send({ embeds: [embed], components: [row] }).catch(() => {});
+      if (translated.trim().toLowerCase() === item.original_text.trim().toLowerCase()) {
+        continue;
+      }
+
+      validItems.push({
+        authorName: item.author_name,
+        authorAvatar: item.author_avatar,
+        translatedText: translated,
+        originalText: item.original_text,
+      });
+    }
+
+    if (validItems.length === 0) continue;
+
+    await thread
+      .send(
+        `› Focus switched to **#${group.channelName}** (${validItems.length} caught-up message${validItems.length > 1 ? 's' : ''})`
+      )
+      .catch(() => {});
+
+    const chunkSize = 8;
+    for (let i = 0; i < validItems.length; i += chunkSize) {
+      const chunk = validItems.slice(i, i + chunkSize);
+      const embed = createBatchedChannelEmbed({
+        channelName: group.channelName,
+        targetLanguage: prefs.target_language,
+        items: chunk,
+        showOriginal: prefs.show_original === 1,
+      });
+
+      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`livethread_mute:${chanId}`)
+          .setLabel(`Mute #${group.channelName}`)
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setLabel('Jump to Message ↗')
+          .setStyle(ButtonStyle.Link)
+          .setURL(group.latestUrl)
+      );
+
+      await thread.send({ embeds: [embed], components: [row] }).catch(() => {});
+    }
+
+    totalDelivered += validItems.length;
   }
+
+  return totalDelivered;
 }
 
 async function notifyThreadUnreadActivity(
@@ -255,10 +303,19 @@ async function notifyThreadUnreadActivity(
   discordId: string
 ): Promise<void> {
   const counts = dbService.getBufferedCountsByUser(discordId);
-  if (counts.size === 0) return;
-
   const thread = (await client.channels.fetch(threadId).catch(() => null)) as ThreadChannel | null;
   if (!thread || !thread.isThread()) return;
+
+  const existingMsgId = lastUnreadMessagePerThread.get(threadId);
+
+  if (counts.size === 0) {
+    if (existingMsgId) {
+      const existingMsg = await thread.messages.fetch(existingMsgId).catch(() => null);
+      if (existingMsg) await existingMsg.delete().catch(() => {});
+      lastUnreadMessagePerThread.delete(threadId);
+    }
+    return;
+  }
 
   const row = new ActionRowBuilder<ButtonBuilder>();
   let totalUnread = 0;
@@ -269,8 +326,8 @@ async function notifyThreadUnreadActivity(
     if (buttonsAdded < 4) {
       row.addComponents(
         new ButtonBuilder()
-          .setCustomId(`livethread_catchup:${channelId}`)
-          .setLabel(`#${info.channelName} (${info.count})`)
+          .setCustomId(`livethread_focus_btn:${channelId}`)
+          .setLabel(`Focus #${info.channelName} (${info.count})`)
           .setStyle(ButtonStyle.Secondary)
       );
       buttonsAdded++;
@@ -279,16 +336,15 @@ async function notifyThreadUnreadActivity(
 
   row.addComponents(
     new ButtonBuilder()
-      .setCustomId(`livethread_catchup_all:${threadId}`)
-      .setLabel(`View All (${totalUnread})`)
+      .setCustomId(`livethread_focus_all:${threadId}`)
+      .setLabel(`Focus All (${totalUnread})`)
       .setStyle(ButtonStyle.Primary)
   );
 
   const embed = new EmbedBuilder()
     .setColor(0x8b5cf6)
-    .setDescription(`Activity in other channels (${totalUnread} new translations waiting)`);
+    .setDescription(`• Activity in other channels (${totalUnread} new message${totalUnread > 1 ? 's' : ''} waiting)`);
 
-  const existingMsgId = lastUnreadMessagePerThread.get(threadId);
   if (existingMsgId) {
     const existingMsg = await thread.messages.fetch(existingMsgId).catch(() => null);
     if (existingMsg) {
@@ -381,23 +437,23 @@ async function handleSelectMenuInteraction(interaction: StringSelectMenuInteract
       await interaction.update({ components: [selectRow, stopRow] }).catch(() => {});
     }
 
-    if (isAll) {
-      await deliverBufferedMessagesToThread(interaction.client, threadId, interaction.user.id);
-    } else {
-      await deliverBufferedMessagesToThread(
-        interaction.client,
-        threadId,
-        interaction.user.id,
-        targetChannelId
-      );
+    const deliveredCount = isAll
+      ? await deliverBufferedMessagesToThread(interaction.client, threadId, interaction.user.id)
+      : await deliverBufferedMessagesToThread(
+          interaction.client,
+          threadId,
+          interaction.user.id,
+          targetChannelId
+        );
+
+    if (deliveredCount === 0) {
+      const thread = (await interaction.client.channels.fetch(threadId).catch(() => null)) as ThreadChannel | null;
+      if (thread && thread.isThread()) {
+        await thread.send(`› Focus switched to **${channelName}**`).catch(() => {});
+      }
     }
 
-    const unreadMsgId = lastUnreadMessagePerThread.get(threadId);
-    if (unreadMsgId && interaction.channel && 'messages' in interaction.channel) {
-      const m = await interaction.channel.messages.fetch(unreadMsgId).catch(() => null);
-      if (m) await m.delete().catch(() => {});
-      lastUnreadMessagePerThread.delete(threadId);
-    }
+    await notifyThreadUnreadActivity(interaction.client, threadId, interaction.user.id);
 
     await interaction.followUp({
       content: isAll
@@ -973,7 +1029,10 @@ async function resolveTargetTextChannelForUser(
     return;
   }
 
-  if (customId.startsWith('livethread_catchup:')) {
+  if (
+    customId.startsWith('livethread_focus_btn:') ||
+    customId.startsWith('livethread_catchup:')
+  ) {
     const channelId = customId.split(':')[1];
     if (!channelId) return;
 
@@ -981,35 +1040,51 @@ async function resolveTargetTextChannelForUser(
 
     const thread = interaction.channel as ThreadChannel | null;
     if (thread && thread.isThread()) {
-      await deliverBufferedMessagesToThread(
+      dbService.setThreadFocus(thread.id, channelId);
+
+      const targetChannel = interaction.guild?.channels.cache.get(channelId);
+      const channelName = targetChannel ? `#${targetChannel.name}` : 'this channel';
+
+      const deliveredCount = await deliverBufferedMessagesToThread(
         interaction.client,
         thread.id,
         interaction.user.id,
         channelId
       );
 
-      const counts = dbService.getBufferedCountsByUser(interaction.user.id);
-      if (counts.size === 0) {
-        await interaction.message.delete().catch(() => {});
-        lastUnreadMessagePerThread.delete(thread.id);
-      } else {
-        await notifyThreadUnreadActivity(interaction.client, thread.id, interaction.user.id);
+      if (deliveredCount === 0) {
+        await thread.send(`› Focus switched to **${channelName}**`).catch(() => {});
       }
+
+      await notifyThreadUnreadActivity(interaction.client, thread.id, interaction.user.id);
     }
     return;
   }
 
-  if (customId.startsWith('livethread_catchup_all:')) {
+  if (
+    customId.startsWith('livethread_focus_all:') ||
+    customId.startsWith('livethread_catchup_all:')
+  ) {
     const threadId = customId.split(':')[1];
     if (!threadId) return;
 
     await interaction.deferUpdate().catch(() => {});
 
     dbService.setThreadFocus(threadId, 'all');
-    await deliverBufferedMessagesToThread(interaction.client, threadId, interaction.user.id);
+    const deliveredCount = await deliverBufferedMessagesToThread(
+      interaction.client,
+      threadId,
+      interaction.user.id
+    );
 
-    await interaction.message.delete().catch(() => {});
-    lastUnreadMessagePerThread.delete(threadId);
+    if (deliveredCount === 0) {
+      const thread = (await interaction.client.channels.fetch(threadId).catch(() => null)) as ThreadChannel | null;
+      if (thread && thread.isThread()) {
+        await thread.send('› Focus switched to **All Channels**').catch(() => {});
+      }
+    }
+
+    await notifyThreadUnreadActivity(interaction.client, threadId, interaction.user.id);
     return;
   }
 
@@ -1691,24 +1766,18 @@ client.on(Events.MessageCreate, async (message: Message) => {
               client,
             });
           } else {
-            const translated = await translationService.translateWithGoogle(
-              message.content,
-              lt.target_language
-            );
-            if (translated.trim().toLowerCase() !== message.content.trim().toLowerCase()) {
-              dbService.saveBufferedMessage({
-                discord_id: lt.discord_id,
-                channel_id: textChannel.id,
-                channel_name: channelName,
-                author_name: authorName,
-                author_avatar: authorAvatar,
-                original_text: message.content,
-                translated_text: translated,
-                url: message.url,
-              });
+            dbService.saveBufferedMessage({
+              discord_id: lt.discord_id,
+              channel_id: textChannel.id,
+              channel_name: channelName,
+              author_name: authorName,
+              author_avatar: authorAvatar,
+              original_text: message.content,
+              translated_text: '',
+              url: message.url,
+            });
 
-              await notifyThreadUnreadActivity(client, lt.thread_id, lt.discord_id);
-            }
+            await notifyThreadUnreadActivity(client, lt.thread_id, lt.discord_id);
           }
         } catch (err) {
           console.error('Error queuing batched thread message:', err);

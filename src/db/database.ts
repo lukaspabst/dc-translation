@@ -1052,12 +1052,14 @@ export const dbService = {
     author_name: string;
     author_avatar?: string;
     original_text: string;
-    translated_text: string;
+    translated_text?: string;
     url: string;
   }): void {
     const id = `${item.channel_id}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
     const encOriginal = encryptForUser(item.original_text, item.discord_id);
-    const encTranslated = encryptForUser(item.translated_text, item.discord_id);
+    const encTranslated = item.translated_text
+      ? encryptForUser(item.translated_text, item.discord_id)
+      : '';
     const now = Math.floor(Date.now() / 1000);
 
     try {
