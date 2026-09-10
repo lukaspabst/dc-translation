@@ -92,3 +92,60 @@ export function createLiveThreadMessageEmbed(
   return embed;
 }
 
+export interface BatchedMessageItem {
+  authorName: string;
+  authorAvatar?: string;
+  translatedText: string;
+  originalText?: string;
+}
+
+export function createBatchedChannelEmbed(options: {
+  channelName: string;
+  targetLanguage: string;
+  items: readonly BatchedMessageItem[];
+  showOriginal?: boolean;
+}): EmbedBuilder {
+  const { channelName, items, showOriginal = false } = options;
+
+  const embed = new EmbedBuilder()
+    .setColor(BOT_VIOLET)
+    .setTitle(`#${channelName} › Transcript`);
+
+  if (items.length === 1 && items[0].authorAvatar) {
+    embed.setAuthor({
+      name: `${items[0].authorName} • #${channelName}`,
+      iconURL: items[0].authorAvatar,
+    });
+  }
+
+  const lines: string[] = [];
+  for (const item of items) {
+    const text =
+      item.translatedText.length > 500
+        ? `${item.translatedText.substring(0, 500)}...`
+        : item.translatedText;
+    let block = `**${item.authorName}**: ${text}`;
+    if (showOriginal && item.originalText && item.originalText.trim() !== '') {
+      const orig =
+        item.originalText.length > 200
+          ? `${item.originalText.substring(0, 200)}...`
+          : item.originalText;
+      block += `\n> *${orig}*`;
+    }
+    lines.push(block);
+  }
+
+  let description = lines.join('\n\n');
+  if (description.length > 4000) {
+    description = `${description.substring(0, 3995)}...`;
+  }
+
+  embed.setDescription(description);
+  embed.setFooter({
+    text: `Live Feed • ${items.length} ${items.length === 1 ? 'message' : 'messages'}`,
+  });
+  embed.setTimestamp();
+
+  return embed;
+}
+

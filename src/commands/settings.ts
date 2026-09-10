@@ -36,10 +36,8 @@ export function buildSettingsEmbed(
   customLabels?: SettingsLabels
 ): EmbedBuilder {
   const labels = customLabels || getSettingsLabels(locale);
-  const match = ALL_SUPPORTED_LANGUAGES.find((l) => l.code === prefs.target_language);
   const currentLang = {
     name: getLocalizedLanguageName(prefs.target_language, locale),
-    flag: match?.flag || '🌐',
   };
 
   const durationLabel =
@@ -67,7 +65,7 @@ export function buildSettingsEmbed(
     .addFields(
       {
         name: labels.targetLang,
-        value: `${currentLang.flag} **${currentLang.name}** (\`${prefs.target_language}\`)\n*${labels.targetLangDesc}*`,
+        value: `**${currentLang.name}** (\`${prefs.target_language}\`)\n*${labels.targetLangDesc}*`,
         inline: false,
       },
       {
@@ -105,9 +103,7 @@ export function buildSettingsComponents(
   ActionRowBuilder<ButtonBuilder>
 ] {
   const labels = customLabels || getSettingsLabels(locale);
-  const match = ALL_SUPPORTED_LANGUAGES.find((l) => l.code === prefs.target_language);
   const currentLangName = getLocalizedLanguageName(prefs.target_language, locale);
-  const currentLangFlag = match?.flag || '🌐';
 
   const langSelect = new StringSelectMenuBuilder()
     .setCustomId('settings_select_lang')
@@ -117,7 +113,6 @@ export function buildSettingsComponents(
         new StringSelectMenuOptionBuilder()
           .setLabel(`${getLocalizedLanguageName(l.code, locale)} (${l.code})`)
           .setValue(l.code)
-          .setEmoji(l.flag)
           .setDefault(l.code === prefs.target_language)
       )
     );

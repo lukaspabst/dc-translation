@@ -1050,7 +1050,7 @@ const HELP_DICTIONARIES: Record<string, HelpLabels> = {
       'Creates a private thread alongside the channel. Foreign messages are automatically translated in real time without cluttering main chat.',
     sectionFlags: 'Flag Reactions',
     sectionFlagsBody:
-      'React to any message with a flag emoji (e.g. 🇩🇪, 🇬🇧, 🇯🇵) to instantly translate it into that language.',
+      'React to any message with a flag reaction to instantly translate it into that language.',
     sectionDirect: 'Direct & Context Menu',
     sectionDirectBody:
       'Right-click any message › Apps › Translate, or use the /translate command.',
@@ -1070,7 +1070,7 @@ const HELP_DICTIONARIES: Record<string, HelpLabels> = {
       'Öffnet einen privaten Thread neben dem Chat. Fremde Nachrichten werden automatisch in Echtzeit übersetzt, ohne den Hauptchat zu stören.',
     sectionFlags: 'Flaggen-Reaktionen',
     sectionFlagsBody:
-      'Reagiere auf eine Nachricht mit einer Länderflagge (z.B. 🇩🇪, 🇬🇧, 🇯🇵), um sie sofort in diese Sprache zu übersetzen.',
+      'Reagiere auf eine Nachricht mit einer Länderflagge, um sie sofort in diese Sprache zu übersetzen.',
     sectionDirect: 'Direkt & Kontextmenü',
     sectionDirectBody:
       'Rechtsklick auf eine Nachricht › Apps › Übersetzen, oder nutze den Befehl /translate.',
@@ -1090,7 +1090,7 @@ const HELP_DICTIONARIES: Record<string, HelpLabels> = {
       'Crea un hilo privado junto al chat. Los mensajes extranjeros se traducen automáticamente en tiempo real.',
     sectionFlags: 'Reacciones con banderas',
     sectionFlagsBody:
-      'Reacciona a cualquier mensaje con la bandera de un país (ej. 🇩🇪, 🇬🇧, 🇯🇵) para traducirlo.',
+      'Reacciona a cualquier mensaje con la bandera de un país para traducirlo.',
     sectionDirect: 'Menú contextual y directo',
     sectionDirectBody:
       'Clic derecho en un mensaje › Apps › Traducir, o usa el comando /translate.',
@@ -1110,7 +1110,7 @@ const HELP_DICTIONARIES: Record<string, HelpLabels> = {
       'Ouvre un fil privé à côté du salon. Les messages sont traduits en temps réel sans encombrer le chat.',
     sectionFlags: 'Réactions drapeaux',
     sectionFlagsBody:
-      'Réagissez à un message avec un drapeau (ex. 🇩🇪, 🇬🇧, 🇯🇵) pour le traduire immédiatement.',
+      'Réagissez à un message avec un drapeau pour le traduire immédiatement.',
     sectionDirect: 'Direct et menu contextuel',
     sectionDirectBody:
       'Clic droit sur un message › Apps › Traduire, ou utilisez la commande /translate.',
@@ -1130,7 +1130,7 @@ const HELP_DICTIONARIES: Record<string, HelpLabels> = {
       'Crea un thread privato accanto alla chat per traduzioni in tempo reale senza intasare il canale.',
     sectionFlags: 'Reazioni con bandiere',
     sectionFlagsBody:
-      'Reagisci a un messaggio con la bandiera di un paese (es. 🇩🇪, 🇬🇧, 🇯🇵) per tradurlo all istante.',
+      'Reagisci a un messaggio con la bandiera di un paese per tradurlo all istante.',
     sectionDirect: 'Diretto e menu contestuale',
     sectionDirectBody:
       'Clic destro su un messaggio › Apps › Traduci, oppure usa il comando /translate.',

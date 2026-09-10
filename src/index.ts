@@ -26,6 +26,7 @@ import {
   ThreadAutoArchiveDuration,
   TextChannel,
   ThreadChannel,
+  GuildMember,
 } from 'discord.js';
 import * as dotenv from 'dotenv';
 import * as http from 'http';
@@ -39,7 +40,12 @@ import * as setFlagDurationCommand from './commands/setFlagDuration';
 import * as translateTextCommand from './commands/translateText';
 import * as helpCommand from './commands/help';
 import * as liveThreadCommand from './commands/liveThread';
-import { ensureLiveThread, syncUserLiveThreadLanguage } from './commands/liveThread';
+import {
+  ensureLiveThread,
+  syncUserLiveThreadLanguage,
+  buildLiveThreadControlComponents,
+} from './commands/liveThread';
+import { enqueueThreadMessage, flushAllBatches } from './services/messageBatcher';
 import * as translateContextCommand from './commands/translateContext';
 import * as translatePermanentContextCommand from './commands/translatePermanentContext';
 import * as broadcastSetupCommand from './commands/broadcastSetup';
@@ -220,6 +226,47 @@ async function handleSelectMenuInteraction(interaction: StringSelectMenuInteract
     const embed = settingsCommand.buildSettingsEmbed(prefs, effectiveLang, labels);
     const [row1, row2, row3, row4] = settingsCommand.buildSettingsComponents(prefs, effectiveLang, labels);
     await interaction.update({ embeds: [embed], components: [row1, row2, row3, row4] });
+    return;
+  }
+
+  if (customId.startsWith('livethread_focus:')) {
+    const threadId = customId.split(':')[1];
+    if (!threadId) return;
+
+    const selectedValue = interaction.values[0];
+    const isAll = selectedValue === 'focus:all';
+    const targetChannelId = isAll ? 'all' : selectedValue.replace('focus:', '');
+
+    dbService.setThreadFocus(threadId, targetChannelId);
+
+    let channelName = 'All Channels';
+    if (!isAll && interaction.guild) {
+      const targetChannel = interaction.guild.channels.cache.get(targetChannelId);
+      if (targetChannel) {
+        channelName = `#${targetChannel.name}`;
+      }
+    }
+
+    if (interaction.guild) {
+      const member =
+        interaction.member instanceof GuildMember
+          ? interaction.member
+          : await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+      const [selectRow, stopRow] = buildLiveThreadControlComponents(
+        interaction.guild,
+        member,
+        threadId,
+        targetChannelId
+      );
+      await interaction.update({ components: [selectRow, stopRow] }).catch(() => {});
+    }
+
+    await interaction.followUp({
+      content: isAll
+        ? 'Feed focus set to All Channels (Unified Feed).'
+        : `Feed focus set to ${channelName}. Other channels are now hidden in this feed.`,
+      flags: MessageFlags.Ephemeral,
+    }).catch(() => {});
     return;
   }
 
@@ -694,6 +741,52 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
     }
+    return;
+  }
+
+  if (customId.startsWith('livethread_mute:')) {
+    const channelId = customId.split(':')[1];
+    if (!channelId || !interaction.guildId) return;
+
+    await dbService.muteChannel(interaction.user.id, channelId, interaction.guildId);
+
+    const channel = interaction.guild
+      ? interaction.guild.channels.cache.get(channelId) ||
+        (await interaction.guild.channels.fetch(channelId).catch(() => null))
+      : null;
+    const channelName = channel && 'name' in channel ? channel.name : 'this channel';
+
+    const unmuteRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`livethread_unmute:${channelId}`)
+        .setLabel(`Unmute #${channelName}`)
+        .setStyle(ButtonStyle.Secondary)
+    );
+
+    await interaction.reply({
+      content: `Muted #${channelName}. You will no longer receive live translations for this channel.`,
+      components: [unmuteRow],
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  if (customId.startsWith('livethread_unmute:')) {
+    const channelId = customId.split(':')[1];
+    if (!channelId) return;
+
+    await dbService.unmuteChannel(interaction.user.id, channelId);
+
+    const channel = interaction.guild
+      ? interaction.guild.channels.cache.get(channelId) ||
+        (await interaction.guild.channels.fetch(channelId).catch(() => null))
+      : null;
+    const channelName = channel && 'name' in channel ? channel.name : 'this channel';
+
+    await interaction.update({
+      content: `Unmuted #${channelName}. Live translations for this channel have been restored.`,
+      components: [],
+    });
     return;
   }
 
@@ -1289,20 +1382,20 @@ client.on(Events.MessageCreate, async (message: Message) => {
     }
   }
 
-  const autoThreadUsers = dbService.getAllAutoTranslateThreadUsers();
-  if (autoThreadUsers.length > 0 && message.channel.type === ChannelType.GuildText) {
+  if (message.channel.type === ChannelType.GuildText) {
     const textChannel = message.channel as TextChannel;
     const guildSettings = dbService.getGuildSettings(message.guild.id);
     const threadsAllowed = guildSettings.allow_live_threads !== 'disabled';
 
     if (threadsAllowed) {
-      for (const threadUser of autoThreadUsers) {
-        if (threadUser.discord_id === message.author.id) continue;
+      const liveThreads = dbService.getLiveThreadsForGuild(message.guild.id);
+      for (const lt of liveThreads) {
+        if (lt.discord_id === message.author.id) continue;
 
         try {
           const member =
-            message.guild.members.cache.get(threadUser.discord_id) ||
-            (await message.guild.members.fetch(threadUser.discord_id).catch(() => null));
+            message.guild.members.cache.get(lt.discord_id) ||
+            (await message.guild.members.fetch(lt.discord_id).catch(() => null));
           if (!member) continue;
 
           if (guildSettings.allow_live_threads === 'admin_only') {
@@ -1321,50 +1414,37 @@ client.on(Events.MessageCreate, async (message: Message) => {
             continue;
           }
 
-          if (userStoppedChannels.get(threadUser.discord_id)?.has(textChannel.id)) {
+          if (dbService.isChannelMuted(lt.discord_id, textChannel.id)) {
             continue;
           }
 
-          const threadChannel = await ensureLiveThread({
-            channel: textChannel,
-            user: member.user,
-            targetLanguage: threadUser.target_language,
-          });
-          if (!threadChannel || !threadChannel.isThread()) continue;
-
-          if (threadChannel.archived) {
-            await threadChannel.setArchived(false).catch(() => {});
-          }
-
-          const translated = await translationService.translateWithGoogle(
-            message.content,
-            threadUser.target_language
-          );
-          if (translated.trim().toLowerCase() === message.content.trim().toLowerCase()) {
+          const currentFocus = dbService.getThreadFocus(lt.thread_id);
+          if (currentFocus !== 'all' && currentFocus !== textChannel.id) {
             continue;
           }
 
-          const channelName =
-            'name' in message.channel ? (message.channel as { name: string }).name : 'chat';
-          const embed = createLiveThreadMessageEmbed(
-            message.author,
-            translated,
-            threadUser.target_language,
+          const prefs = dbService.getUserPreferences(lt.discord_id);
+          const channelName = textChannel.name;
+          const authorName = message.author.displayName || message.author.username;
+          const authorAvatar = message.author.displayAvatarURL({ size: 64 });
+
+          enqueueThreadMessage({
+            threadId: lt.thread_id,
+            channelId: textChannel.id,
             channelName,
-            message.content,
-            threadUser.show_original === 1
-          );
-
-          const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-            new ButtonBuilder()
-              .setLabel('Jump to Message ↗')
-              .setStyle(ButtonStyle.Link)
-              .setURL(message.url)
-          );
-
-          await threadChannel.send({ embeds: [embed], components: [row] }).catch(() => {});
+            targetLanguage: lt.target_language,
+            showOriginal: prefs.show_original === 1,
+            message: {
+              id: message.id,
+              content: message.content,
+              authorName,
+              authorAvatar,
+              url: message.url,
+            },
+            client,
+          });
         } catch (err) {
-          console.error('Error auto-managing thread for user:', err);
+          console.error('Error queuing batched thread message:', err);
         }
       }
     }
@@ -1385,5 +1465,15 @@ if (!token) {
   console.error('DISCORD_TOKEN is missing in .env file.');
   process.exit(1);
 }
+
+process.on('SIGTERM', async () => {
+  await flushAllBatches(client);
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  await flushAllBatches(client);
+  process.exit(0);
+});
 
 client.login(token);

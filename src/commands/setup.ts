@@ -39,11 +39,9 @@ export const data = new SlashCommandBuilder()
 function getLanguageInfo(
   code: string,
   locale?: string
-): { code: string; name: string; flag: string } {
-  const match = ALL_SUPPORTED_LANGUAGES.find((l) => l.code === code);
+): { code: string; name: string } {
   const localizedName = getLocalizedLanguageName(code, locale);
-  const flag = match?.flag || '🌐';
-  return { code, name: localizedName, flag };
+  return { code, name: localizedName };
 }
 
 export function buildStep1(
@@ -76,7 +74,7 @@ export function buildStep1(
       : POPULAR_LANGUAGES.map((lang) => ({
           code: lang.code,
           name: getLocalizedLanguageName(lang.code, locale),
-          flag: lang.flag,
+          flag: '',
         }));
 
   const embed = new EmbedBuilder()
@@ -87,12 +85,12 @@ export function buildStep1(
     .addFields(
       {
         name: labels.currentSelection,
-        value: `${currentLang.flag} **${currentLang.name}** (\`${currentLang.code}\`)`,
+        value: `**${currentLang.name}** (\`${currentLang.code}\`)`,
         inline: true,
       },
       {
         name: labels.detectedLocale,
-        value: `${detectedLang.flag} **${detectedLang.name}** (\`${detectedLang.code}\`)`,
+        value: `**${detectedLang.name}** (\`${detectedLang.code}\`)`,
         inline: true,
       }
     );
@@ -124,7 +122,6 @@ export function buildStep1(
         new StringSelectMenuOptionBuilder()
           .setLabel(`${l.name} (${l.code})`)
           .setValue(l.code)
-          .setEmoji(l.flag)
           .setDefault(l.code === prefs.target_language)
       )
     );
@@ -192,7 +189,7 @@ export function buildStep2(
       },
       {
         name: labels.targetLangField,
-        value: `${currentLang.flag} **${currentLang.name}** (\`${currentLang.code}\`)`,
+        value: `**${currentLang.name}** (\`${currentLang.code}\`)`,
         inline: true,
       }
     );
@@ -255,7 +252,7 @@ export function buildStep3(
     .addFields(
       {
         name: labels.targetLangField,
-        value: `${currentLang.flag} **${currentLang.name}** (\`${currentLang.code}\`)`,
+        value: `**${currentLang.name}** (\`${currentLang.code}\`)`,
         inline: true,
       },
       {
@@ -334,7 +331,7 @@ export function buildCompletion(
     .addFields(
       {
         name: labels.targetLangField,
-        value: `${currentLang.flag} **${currentLang.name}** (\`${currentLang.code}\`)`,
+        value: `**${currentLang.name}** (\`${currentLang.code}\`)`,
         inline: true,
       },
       {

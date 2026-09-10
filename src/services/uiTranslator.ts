@@ -173,7 +173,7 @@ const BASE_HELP_TEMPLATE: Record<string, string> = {
     'Creates a private thread alongside the channel. Foreign messages are automatically translated in real time without cluttering main chat.',
   sectionFlags: 'Flag Reactions',
   sectionFlagsBody:
-    'React to any message with a flag emoji (e.g. 🇩🇪, 🇬🇧, 🇯🇵) to instantly translate it into that language.',
+    'React to any message with a flag reaction to instantly translate it into that language.',
   sectionDirect: 'Direct & Context Menu',
   sectionDirectBody:
     'Right-click any message › Apps › Translate, or use the /translate command.',

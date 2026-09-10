@@ -26,6 +26,13 @@ export interface LiveThreadRecord {
   created_at: string;
 }
 
+export interface UserMutedChannelRecord {
+  discord_id: string;
+  channel_id: string;
+  guild_id: string;
+  created_at: string;
+}
+
 export type PermissionScope = 'disabled' | 'admin_only' | 'everyone';
 
 export interface GuildSettings {
@@ -62,6 +69,8 @@ interface EncryptedGuildRecord {
 
 const userCache = new Map<string, UserPreferences>();
 const guildCache = new Map<string, GuildSettings>();
+const mutedChannelsCache = new Set<string>();
+const threadFocusCache = new Map<string, string>();
 
 let mongoClient: MongoClient | null = null;
 let mongoDb: Db | null = null;
@@ -69,6 +78,7 @@ let mongoUsersCol: Collection<EncryptedUserRecord> | null = null;
 let mongoGuildsCol: Collection<EncryptedGuildRecord> | null = null;
 let mongoLiveThreadsCol: Collection<LiveThreadRecord> | null = null;
 let mongoUiBundlesCol: Collection<UIBundleDoc> | null = null;
+let mongoUserMutedChannelsCol: Collection<UserMutedChannelRecord> | null = null;
 
 export interface UIBundleDoc {
   bundle_key: string;
@@ -93,6 +103,41 @@ sqliteDb.exec(`
     preferred_engine TEXT
   )
 `);
+
+sqliteDb.exec(`
+  CREATE TABLE IF NOT EXISTS user_muted_channels (
+    discord_id TEXT NOT NULL,
+    channel_id TEXT NOT NULL,
+    guild_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (discord_id, channel_id)
+  )
+`);
+
+sqliteDb.exec(`
+  CREATE TABLE IF NOT EXISTS thread_focus (
+    thread_id TEXT PRIMARY KEY,
+    channel_id TEXT NOT NULL
+  )
+`);
+
+try {
+  const mutedRows = sqliteDb
+    .prepare('SELECT discord_id, channel_id FROM user_muted_channels')
+    .all() as { discord_id: string; channel_id: string }[];
+  for (const r of mutedRows) {
+    mutedChannelsCache.add(`${r.discord_id}:${r.channel_id}`);
+  }
+} catch {}
+
+try {
+  const focusRows = sqliteDb
+    .prepare('SELECT thread_id, channel_id FROM thread_focus')
+    .all() as { thread_id: string; channel_id: string }[];
+  for (const r of focusRows) {
+    threadFocusCache.set(r.thread_id, r.channel_id);
+  }
+} catch {}
 
 sqliteDb.exec(`
   CREATE TABLE IF NOT EXISTS live_threads (
@@ -189,6 +234,10 @@ export async function initDatabase(): Promise<void> {
       await mongoLiveThreadsCol.createIndex({ thread_id: 1 }, { unique: true });
       await mongoLiveThreadsCol.createIndex({ discord_id: 1, guild_id: 1 });
 
+      mongoUserMutedChannelsCol = mongoDb.collection<UserMutedChannelRecord>('user_muted_channels');
+      await mongoUserMutedChannelsCol.createIndex({ discord_id: 1, channel_id: 1 }, { unique: true });
+      await mongoUserMutedChannelsCol.createIndex({ discord_id: 1, guild_id: 1 });
+
       try {
         const storedBundles = await mongoUiBundlesCol.find({}).toArray();
         for (const b of storedBundles) {
@@ -272,6 +321,18 @@ export async function initDatabase(): Promise<void> {
                 g.default_mode,
                 g.broadcast_completed
               );
+          } catch {}
+        }
+
+        const storedMuted = await mongoUserMutedChannelsCol.find({}).toArray();
+        for (const m of storedMuted) {
+          try {
+            sqliteDb
+              .prepare(
+                'INSERT INTO user_muted_channels (discord_id, channel_id, guild_id, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(discord_id, channel_id) DO NOTHING'
+              )
+              .run(m.discord_id, m.channel_id, m.guild_id, m.created_at);
+            mutedChannelsCache.add(`${m.discord_id}:${m.channel_id}`);
           } catch {}
         }
       } catch (bundleSyncErr) {
@@ -626,6 +687,17 @@ export const dbService = {
     }
   },
 
+  getLiveThreadsForGuild(guildId: string): LiveThreadRecord[] {
+    try {
+      return sqliteDb
+        .prepare('SELECT * FROM live_threads WHERE guild_id = ?')
+        .all(guildId) as LiveThreadRecord[];
+    } catch (err) {
+      console.error('Error fetching live threads for guild:', err);
+      return [];
+    }
+  },
+
   getUserLiveThreadInChannel(discordId: string, channelId: string): LiveThreadRecord | null {
     try {
       const row = sqliteDb
@@ -805,6 +877,95 @@ export const dbService = {
       } catch (mongoErr) {
         console.error('Error saving ui_bundle to MongoDB:', mongoErr);
       }
+    }
+  },
+
+  isChannelMuted(discordId: string, channelId: string): boolean {
+    return mutedChannelsCache.has(`${discordId}:${channelId}`);
+  },
+
+  async muteChannel(discordId: string, channelId: string, guildId: string): Promise<void> {
+    const key = `${discordId}:${channelId}`;
+    mutedChannelsCache.add(key);
+    const now = new Date().toISOString();
+    try {
+      sqliteDb
+        .prepare(
+          'INSERT INTO user_muted_channels (discord_id, channel_id, guild_id, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(discord_id, channel_id) DO NOTHING'
+        )
+        .run(discordId, channelId, guildId, now);
+    } catch (err) {
+      console.error('Error muting channel in SQLite:', err);
+    }
+
+    if (mongoUserMutedChannelsCol) {
+      mongoUserMutedChannelsCol
+        .updateOne(
+          { discord_id: discordId, channel_id: channelId },
+          {
+            $set: {
+              discord_id: discordId,
+              channel_id: channelId,
+              guild_id: guildId,
+              created_at: now,
+            },
+          },
+          { upsert: true }
+        )
+        .catch((err) => console.error('Error syncing muted channel to MongoDB:', err));
+    }
+  },
+
+  async unmuteChannel(discordId: string, channelId: string): Promise<void> {
+    const key = `${discordId}:${channelId}`;
+    mutedChannelsCache.delete(key);
+    try {
+      sqliteDb
+        .prepare('DELETE FROM user_muted_channels WHERE discord_id = ? AND channel_id = ?')
+        .run(discordId, channelId);
+    } catch (err) {
+      console.error('Error unmuting channel in SQLite:', err);
+    }
+
+    if (mongoUserMutedChannelsCol) {
+      mongoUserMutedChannelsCol
+        .deleteOne({ discord_id: discordId, channel_id: channelId })
+        .catch((err) => console.error('Error unmuting channel in MongoDB:', err));
+    }
+  },
+
+  getMutedChannels(discordId: string, guildId?: string): string[] {
+    try {
+      if (guildId) {
+        const rows = sqliteDb
+          .prepare('SELECT channel_id FROM user_muted_channels WHERE discord_id = ? AND guild_id = ?')
+          .all(discordId, guildId) as { channel_id: string }[];
+        return rows.map((r) => r.channel_id);
+      }
+      const rows = sqliteDb
+        .prepare('SELECT channel_id FROM user_muted_channels WHERE discord_id = ?')
+        .all(discordId) as { channel_id: string }[];
+      return rows.map((r) => r.channel_id);
+    } catch (err) {
+      console.error('Error getting muted channels:', err);
+      return [];
+    }
+  },
+
+  getThreadFocus(threadId: string): string {
+    return threadFocusCache.get(threadId) || 'all';
+  },
+
+  setThreadFocus(threadId: string, channelId: string): void {
+    threadFocusCache.set(threadId, channelId);
+    try {
+      sqliteDb
+        .prepare(
+          'INSERT INTO thread_focus (thread_id, channel_id) VALUES (?, ?) ON CONFLICT(thread_id) DO UPDATE SET channel_id = excluded.channel_id'
+        )
+        .run(threadId, channelId);
+    } catch (err) {
+      console.error('Error setting thread focus in SQLite:', err);
     }
   },
 };

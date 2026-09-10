@@ -50,7 +50,6 @@ export function buildTranslationComponents(
         new StringSelectMenuOptionBuilder()
           .setLabel(`${getLocalizedLanguageName(lang.code, locale)} (${lang.code})`)
           .setValue(lang.code)
-          .setEmoji(lang.flag)
           .setDefault(lang.code === targetLanguage)
       )
     );

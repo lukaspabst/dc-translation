@@ -39,7 +39,7 @@ export async function autocomplete(interaction: AutocompleteInteraction) {
   const choices = searchLanguages(focusedValue, interaction.locale);
   await interaction.respond(
     choices.map((choice) => ({
-      name: `${choice.flag} ${choice.name} (${choice.code})`,
+      name: `${choice.name} (${choice.code})`,
       value: choice.code,
     }))
   );
