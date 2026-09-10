@@ -480,50 +480,25 @@ function hydrateUILabels(raw: Record<string, string>): UILabels {
 
 export async function getDynamicSetupLabels(locale?: string): Promise<SetupLabels> {
   const norm = (locale || 'en').toLowerCase().split('-')[0];
-  const staticLabels = getSetupLabels(norm);
-  if (['en', 'de', 'es', 'fr', 'it'].includes(norm)) {
-    return staticLabels;
-  }
-  const translated = await getOrTranslateBundle('setup_v2', norm, BASE_SETUP_TEMPLATE);
-  return hydrateSetupLabels(translated);
+  return getSetupLabels(norm);
 }
 
 export async function getDynamicSettingsLabels(locale?: string): Promise<SettingsLabels> {
   const norm = (locale || 'en').toLowerCase().split('-')[0];
-  const staticLabels = getSettingsLabels(norm);
-  if (['en', 'de', 'es', 'fr', 'it'].includes(norm)) {
-    return staticLabels;
-  }
-  const translated = await getOrTranslateBundle('settings_v2', norm, BASE_SETTINGS_TEMPLATE);
-  return hydrateSettingsLabels(translated);
+  return getSettingsLabels(norm);
 }
 
 export async function getDynamicServerLabels(locale?: string): Promise<ServerLabels> {
   const norm = (locale || 'en').toLowerCase().split('-')[0];
-  const staticLabels = getServerLabels(norm);
-  if (['en', 'de', 'es', 'fr', 'it'].includes(norm)) {
-    return staticLabels;
-  }
-  const translated = await getOrTranslateBundle('server_v2', norm, BASE_SERVER_TEMPLATE);
-  return hydrateServerLabels(translated);
+  return getServerLabels(norm);
 }
 
 export async function getDynamicHelpLabels(locale?: string): Promise<HelpLabels> {
   const norm = (locale || 'en').toLowerCase().split('-')[0];
-  const staticLabels = getHelpLabels(norm);
-  if (['en', 'de', 'es', 'fr', 'it'].includes(norm)) {
-    return staticLabels;
-  }
-  const translated = await getOrTranslateBundle('help_v2', norm, BASE_HELP_TEMPLATE);
-  return hydrateHelpLabels(translated);
+  return getHelpLabels(norm);
 }
 
 export async function getDynamicUILabels(locale?: string): Promise<UILabels> {
   const norm = (locale || 'en').toLowerCase().split('-')[0];
-  const staticLabels = getUILabels(norm);
-  if (['en', 'de', 'es', 'fr', 'it'].includes(norm)) {
-    return staticLabels;
-  }
-  const translated = await getOrTranslateBundle('ui_v2', norm, BASE_UI_TEMPLATE);
-  return hydrateUILabels(translated);
+  return getUILabels(norm);
 }
