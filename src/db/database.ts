@@ -47,7 +47,7 @@ export interface ChannelMessageRecord {
   author_avatar?: string;
   encrypted_text: string;
   url: string;
-  created_at: number;
+  created_at: Date | number;
 }
 
 export interface UserChannelReadRecord {
@@ -354,11 +354,25 @@ export async function initDatabase(): Promise<void> {
       await mongoUserMutedChannelsCol.createIndex({ discord_id: 1, guild_id: 1 });
 
       mongoBufferedMessagesCol = mongoDb.collection<BufferedMessageRecord>('buffered_messages');
-      await mongoBufferedMessagesCol.createIndex({ created_at: 1 }, { expireAfterSeconds: 7200 });
+      try {
+        await mongoBufferedMessagesCol.createIndex({ created_at: 1 }, { expireAfterSeconds: 604800 });
+      } catch {
+        try {
+          await mongoBufferedMessagesCol.dropIndex('created_at_1');
+          await mongoBufferedMessagesCol.createIndex({ created_at: 1 }, { expireAfterSeconds: 604800 });
+        } catch {}
+      }
       await mongoBufferedMessagesCol.createIndex({ discord_id: 1, channel_id: 1 });
 
       mongoChannelBufferedMessagesCol = mongoDb.collection<ChannelMessageRecord>('channel_buffered_messages');
-      await mongoChannelBufferedMessagesCol.createIndex({ created_at: 1 }, { expireAfterSeconds: 7200 });
+      try {
+        await mongoChannelBufferedMessagesCol.createIndex({ created_at: 1 }, { expireAfterSeconds: 604800 });
+      } catch {
+        try {
+          await mongoChannelBufferedMessagesCol.dropIndex('created_at_1');
+          await mongoChannelBufferedMessagesCol.createIndex({ created_at: 1 }, { expireAfterSeconds: 604800 });
+        } catch {}
+      }
       await mongoChannelBufferedMessagesCol.createIndex({ channel_id: 1, created_at: 1 });
 
       mongoUserChannelReadsCol = mongoDb.collection<UserChannelReadRecord>('user_channel_reads');
@@ -492,6 +506,9 @@ export async function initDatabase(): Promise<void> {
           const storedChanMsgs = await mongoChannelBufferedMessagesCol.find({}).toArray();
           for (const cm of storedChanMsgs) {
             try {
+              const createdAtSec = cm.created_at instanceof Date
+                ? Math.floor(cm.created_at.getTime() / 1000)
+                : Number(cm.created_at);
               sqliteDb
                 .prepare(`
                   INSERT INTO channel_buffered_messages (id, guild_id, channel_id, channel_name, author_name, author_avatar, encrypted_text, url, created_at)
@@ -507,10 +524,13 @@ export async function initDatabase(): Promise<void> {
                   cm.author_avatar || '',
                   cm.encrypted_text,
                   cm.url,
-                  cm.created_at
+                  createdAtSec
                 );
             } catch {}
           }
+          sqliteDb
+            .prepare('DELETE FROM channel_buffered_messages WHERE created_at < ?')
+            .run(Math.floor(Date.now() / 1000) - 604800);
         }
 
         if (mongoUserChannelReadsCol) {
@@ -1309,7 +1329,15 @@ export const dbService = {
         .prepare(`
           INSERT INTO channel_buffered_messages (id, guild_id, channel_id, channel_name, author_name, author_avatar, encrypted_text, url, created_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT(id) DO UPDATE SET encrypted_text = excluded.encrypted_text
+          ON CONFLICT(id) DO UPDATE SET
+            guild_id = excluded.guild_id,
+            channel_id = excluded.channel_id,
+            channel_name = excluded.channel_name,
+            author_name = excluded.author_name,
+            author_avatar = excluded.author_avatar,
+            encrypted_text = excluded.encrypted_text,
+            url = excluded.url,
+            created_at = excluded.created_at
         `)
         .run(
           item.id,
@@ -1322,6 +1350,10 @@ export const dbService = {
           item.url,
           now
         );
+
+      sqliteDb
+        .prepare('DELETE FROM channel_buffered_messages WHERE created_at < ?')
+        .run(Math.floor(Date.now() / 1000) - 604800);
     } catch (e) {
       console.error('Error saving channel message to SQLite:', e);
     }
@@ -1340,7 +1372,7 @@ export const dbService = {
               author_avatar: item.author_avatar,
               encrypted_text: encText,
               url: item.url,
-              created_at: now,
+              created_at: new Date(now * 1000),
             },
           },
           { upsert: true }
@@ -1396,16 +1428,36 @@ export const dbService = {
     }
   },
 
-  getUnreadMessagesForChannel(discordId: string, channelId: string): ChannelMessageItem[] {
+  getUnreadCountForChannel(discordId: string, channelId: string): number {
+    const lastRead = this.getUserChannelRead(discordId, channelId);
+    try {
+      const row = sqliteDb
+        .prepare(`
+          SELECT COUNT(*) as cnt
+          FROM channel_buffered_messages
+          WHERE channel_id = ? AND created_at > ?
+        `)
+        .get(channelId, lastRead) as { cnt: number } | undefined;
+      return row ? row.cnt : 0;
+    } catch {
+      return 0;
+    }
+  },
+
+  getUnreadMessagesForChannel(discordId: string, channelId: string, limit: number = 50): ChannelMessageItem[] {
     const lastRead = this.getUserChannelRead(discordId, channelId);
     try {
       const rows = sqliteDb
         .prepare(`
-          SELECT * FROM channel_buffered_messages
-          WHERE channel_id = ? AND created_at > ?
+          SELECT * FROM (
+            SELECT * FROM channel_buffered_messages
+            WHERE channel_id = ? AND created_at > ?
+            ORDER BY created_at DESC
+            LIMIT ?
+          )
           ORDER BY created_at ASC
         `)
-        .all(channelId, lastRead) as Array<Record<string, unknown>>;
+        .all(channelId, lastRead, limit) as Array<Record<string, unknown>>;
 
       return rows.map((r) => ({
         id: String(r.id),

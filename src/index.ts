@@ -225,7 +225,8 @@ async function deliverChannelCatchupToThread(
   let totalDelivered = 0;
 
   for (const cId of channelIdsToProcess) {
-    const unreadItems = dbService.getUnreadMessagesForChannel(discordId, cId);
+    const totalUnreads = dbService.getUnreadCountForChannel(discordId, cId);
+    const unreadItems = dbService.getUnreadMessagesForChannel(discordId, cId, 50);
     if (unreadItems.length === 0) {
       dbService.updateUserChannelRead(discordId, cId);
       continue;
@@ -268,10 +269,12 @@ async function deliverChannelCatchupToThread(
     if (validItems.length === 0) continue;
 
     const channelName = unreadItems[0].channel_name;
+    const countNote = totalUnreads > validItems.length
+      ? `${validItems.length} latest of ${totalUnreads} unread messages`
+      : `${validItems.length} caught-up message${validItems.length > 1 ? 's' : ''}`;
+
     await thread
-      .send(
-        `› Focus switched to **#${channelName}** (${validItems.length} caught-up message${validItems.length > 1 ? 's' : ''})`
-      )
+      .send(`› Focus switched to **#${channelName}** (${countNote})`)
       .catch(() => {});
 
     const chunkSize = 8;
