@@ -1,9 +1,10 @@
 import { createHash } from 'crypto';
 import type { Collection } from 'mongodb';
+import { encryptField, decryptField } from '../utils/crypto';
 
 export interface CachedTranslationDoc {
   key: string;
-  source_text: string;
+  source_text?: string;
   target_lang: string;
   translated_text: string;
   engine: string;
@@ -65,8 +66,9 @@ class EnhancedTranslationCache {
       try {
         const doc = await mongoCacheCol.findOne({ key });
         if (doc && doc.translated_text) {
-          this.setL1(key, doc.translated_text);
-          return doc.translated_text;
+          const decrypted = decryptField(doc.translated_text);
+          this.setL1(key, decrypted);
+          return decrypted;
         }
       } catch (err) {
         console.warn('MongoDB Atlas cache lookup warning:', err);
@@ -87,14 +89,14 @@ class EnhancedTranslationCache {
 
     if (mongoCacheCol) {
       try {
+        const encTranslated = encryptField(translatedText);
         await mongoCacheCol.updateOne(
           { key },
           {
             $set: {
               key,
-              source_text: text.substring(0, 1000),
               target_lang: targetLanguage.toLowerCase().trim(),
-              translated_text: translatedText,
+              translated_text: encTranslated,
               engine,
               created_at: new Date(),
             },

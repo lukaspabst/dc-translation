@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { MongoClient, Db, Collection, MongoClientOptions } from 'mongodb';
 import path from 'path';
 import * as fs from 'fs';
-import { encryptField, decryptField, encryptForUser, decryptForUser } from '../utils/crypto';
+import { encryptField, decryptField, encryptForUser, decryptForUser, encryptForChannel, decryptForChannel } from '../utils/crypto';
 import { setMongoCacheCollection, CachedTranslationDoc } from '../services/cache';
 
 export interface UserPreferences {
@@ -24,6 +24,36 @@ export interface LiveThreadRecord {
   channel_id: string;
   target_language: string;
   created_at: string;
+}
+
+export interface ChannelMessageItem {
+  id: string;
+  guild_id: string;
+  channel_id: string;
+  channel_name: string;
+  author_name: string;
+  author_avatar?: string;
+  original_text: string;
+  url: string;
+  created_at: number;
+}
+
+export interface ChannelMessageRecord {
+  id: string;
+  guild_id: string;
+  channel_id: string;
+  channel_name: string;
+  author_name: string;
+  author_avatar?: string;
+  encrypted_text: string;
+  url: string;
+  created_at: number;
+}
+
+export interface UserChannelReadRecord {
+  discord_id: string;
+  channel_id: string;
+  last_read_at: number;
 }
 
 export interface BufferedMessageItem {
@@ -96,6 +126,7 @@ const userCache = new Map<string, UserPreferences>();
 const guildCache = new Map<string, GuildSettings>();
 const mutedChannelsCache = new Set<string>();
 const threadFocusCache = new Map<string, string>();
+const userChannelReadsCache = new Map<string, number>();
 
 let mongoClient: MongoClient | null = null;
 let mongoDb: Db | null = null;
@@ -105,6 +136,8 @@ let mongoLiveThreadsCol: Collection<LiveThreadRecord> | null = null;
 let mongoUiBundlesCol: Collection<UIBundleDoc> | null = null;
 let mongoUserMutedChannelsCol: Collection<UserMutedChannelRecord> | null = null;
 let mongoBufferedMessagesCol: Collection<BufferedMessageRecord> | null = null;
+let mongoChannelBufferedMessagesCol: Collection<ChannelMessageRecord> | null = null;
+let mongoUserChannelReadsCol: Collection<UserChannelReadRecord> | null = null;
 
 export interface UIBundleDoc {
   bundle_key: string;
@@ -234,6 +267,42 @@ try {
   sqliteDb.exec('ALTER TABLE live_threads ADD COLUMN guild_id TEXT');
 } catch {}
 
+sqliteDb.exec(`
+  CREATE TABLE IF NOT EXISTS channel_buffered_messages (
+    id TEXT PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    channel_id TEXT NOT NULL,
+    channel_name TEXT NOT NULL,
+    author_name TEXT NOT NULL,
+    author_avatar TEXT,
+    encrypted_text TEXT NOT NULL,
+    url TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  )
+`);
+
+sqliteDb.exec(`
+  CREATE INDEX IF NOT EXISTS idx_chan_buf_time ON channel_buffered_messages(channel_id, created_at)
+`);
+
+sqliteDb.exec(`
+  CREATE TABLE IF NOT EXISTS user_channel_reads (
+    discord_id TEXT NOT NULL,
+    channel_id TEXT NOT NULL,
+    last_read_at INTEGER NOT NULL,
+    PRIMARY KEY (discord_id, channel_id)
+  )
+`);
+
+try {
+  const readRows = sqliteDb
+    .prepare('SELECT discord_id, channel_id, last_read_at FROM user_channel_reads')
+    .all() as { discord_id: string; channel_id: string; last_read_at: number }[];
+  for (const r of readRows) {
+    userChannelReadsCache.set(`${r.discord_id}:${r.channel_id}`, r.last_read_at);
+  }
+} catch {}
+
 export async function initDatabase(): Promise<void> {
   const mongoUri = process.env.MONGODB_URI;
   if (mongoUri && mongoUri.trim() !== '') {
@@ -287,6 +356,13 @@ export async function initDatabase(): Promise<void> {
       mongoBufferedMessagesCol = mongoDb.collection<BufferedMessageRecord>('buffered_messages');
       await mongoBufferedMessagesCol.createIndex({ created_at: 1 }, { expireAfterSeconds: 7200 });
       await mongoBufferedMessagesCol.createIndex({ discord_id: 1, channel_id: 1 });
+
+      mongoChannelBufferedMessagesCol = mongoDb.collection<ChannelMessageRecord>('channel_buffered_messages');
+      await mongoChannelBufferedMessagesCol.createIndex({ created_at: 1 }, { expireAfterSeconds: 7200 });
+      await mongoChannelBufferedMessagesCol.createIndex({ channel_id: 1, created_at: 1 });
+
+      mongoUserChannelReadsCol = mongoDb.collection<UserChannelReadRecord>('user_channel_reads');
+      await mongoUserChannelReadsCol.createIndex({ discord_id: 1, channel_id: 1 }, { unique: true });
 
       try {
         const storedBundles = await mongoUiBundlesCol.find({}).toArray();
@@ -408,6 +484,47 @@ export async function initDatabase(): Promise<void> {
                   bm.url,
                   bm.created_at
                 );
+            } catch {}
+          }
+        }
+
+        if (mongoChannelBufferedMessagesCol) {
+          const storedChanMsgs = await mongoChannelBufferedMessagesCol.find({}).toArray();
+          for (const cm of storedChanMsgs) {
+            try {
+              sqliteDb
+                .prepare(`
+                  INSERT INTO channel_buffered_messages (id, guild_id, channel_id, channel_name, author_name, author_avatar, encrypted_text, url, created_at)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  ON CONFLICT(id) DO NOTHING
+                `)
+                .run(
+                  cm.id,
+                  cm.guild_id,
+                  cm.channel_id,
+                  cm.channel_name,
+                  cm.author_name,
+                  cm.author_avatar || '',
+                  cm.encrypted_text,
+                  cm.url,
+                  cm.created_at
+                );
+            } catch {}
+          }
+        }
+
+        if (mongoUserChannelReadsCol) {
+          const storedReads = await mongoUserChannelReadsCol.find({}).toArray();
+          for (const ur of storedReads) {
+            try {
+              userChannelReadsCache.set(`${ur.discord_id}:${ur.channel_id}`, ur.last_read_at);
+              sqliteDb
+                .prepare(`
+                  INSERT INTO user_channel_reads (discord_id, channel_id, last_read_at)
+                  VALUES (?, ?, ?)
+                  ON CONFLICT(discord_id, channel_id) DO UPDATE SET last_read_at = excluded.last_read_at
+                `)
+                .run(ur.discord_id, ur.channel_id, ur.last_read_at);
             } catch {}
           }
         }
@@ -1171,6 +1288,167 @@ export const dbService = {
         console.error('Error clearing buffered messages in MongoDB:', err);
       });
     }
+  },
+
+  saveChannelMessage(item: {
+    id: string;
+    guild_id: string;
+    channel_id: string;
+    channel_name: string;
+    author_name: string;
+    author_avatar?: string;
+    original_text: string;
+    url: string;
+    created_at?: number;
+  }): void {
+    const encText = encryptForChannel(item.original_text, item.channel_id);
+    const now = item.created_at || Math.floor(Date.now() / 1000);
+
+    try {
+      sqliteDb
+        .prepare(`
+          INSERT INTO channel_buffered_messages (id, guild_id, channel_id, channel_name, author_name, author_avatar, encrypted_text, url, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET encrypted_text = excluded.encrypted_text
+        `)
+        .run(
+          item.id,
+          item.guild_id,
+          item.channel_id,
+          item.channel_name,
+          item.author_name,
+          item.author_avatar || '',
+          encText,
+          item.url,
+          now
+        );
+    } catch (e) {
+      console.error('Error saving channel message to SQLite:', e);
+    }
+
+    if (mongoChannelBufferedMessagesCol) {
+      mongoChannelBufferedMessagesCol
+        .updateOne(
+          { id: item.id },
+          {
+            $set: {
+              id: item.id,
+              guild_id: item.guild_id,
+              channel_id: item.channel_id,
+              channel_name: item.channel_name,
+              author_name: item.author_name,
+              author_avatar: item.author_avatar,
+              encrypted_text: encText,
+              url: item.url,
+              created_at: now,
+            },
+          },
+          { upsert: true }
+        )
+        .catch((err) => {
+          console.error('Error syncing channel message to MongoDB:', err);
+        });
+    }
+  },
+
+  updateUserChannelRead(discordId: string, channelId: string, timestamp?: number): void {
+    const ts = timestamp || Math.floor(Date.now() / 1000);
+    userChannelReadsCache.set(`${discordId}:${channelId}`, ts);
+
+    try {
+      sqliteDb
+        .prepare(`
+          INSERT INTO user_channel_reads (discord_id, channel_id, last_read_at)
+          VALUES (?, ?, ?)
+          ON CONFLICT(discord_id, channel_id) DO UPDATE SET last_read_at = excluded.last_read_at
+        `)
+        .run(discordId, channelId, ts);
+    } catch (e) {
+      console.error('Error updating user channel read in SQLite:', e);
+    }
+
+    if (mongoUserChannelReadsCol) {
+      mongoUserChannelReadsCol
+        .updateOne(
+          { discord_id: discordId, channel_id: channelId },
+          { $set: { discord_id: discordId, channel_id: channelId, last_read_at: ts } },
+          { upsert: true }
+        )
+        .catch((err) => {
+          console.error('Error syncing user channel read to MongoDB:', err);
+        });
+    }
+  },
+
+  getUserChannelRead(discordId: string, channelId: string): number {
+    const cached = userChannelReadsCache.get(`${discordId}:${channelId}`);
+    if (cached !== undefined) return cached;
+
+    try {
+      const row = sqliteDb
+        .prepare('SELECT last_read_at FROM user_channel_reads WHERE discord_id = ? AND channel_id = ?')
+        .get(discordId, channelId) as { last_read_at: number } | undefined;
+      const ts = row ? row.last_read_at : 0;
+      userChannelReadsCache.set(`${discordId}:${channelId}`, ts);
+      return ts;
+    } catch {
+      return 0;
+    }
+  },
+
+  getUnreadMessagesForChannel(discordId: string, channelId: string): ChannelMessageItem[] {
+    const lastRead = this.getUserChannelRead(discordId, channelId);
+    try {
+      const rows = sqliteDb
+        .prepare(`
+          SELECT * FROM channel_buffered_messages
+          WHERE channel_id = ? AND created_at > ?
+          ORDER BY created_at ASC
+        `)
+        .all(channelId, lastRead) as Array<Record<string, unknown>>;
+
+      return rows.map((r) => ({
+        id: String(r.id),
+        guild_id: String(r.guild_id),
+        channel_id: String(r.channel_id),
+        channel_name: String(r.channel_name),
+        author_name: String(r.author_name),
+        author_avatar: r.author_avatar ? String(r.author_avatar) : undefined,
+        original_text: decryptForChannel(String(r.encrypted_text), channelId),
+        url: String(r.url),
+        created_at: Number(r.created_at),
+      }));
+    } catch (e) {
+      console.error('Error reading unread channel messages:', e);
+      return [];
+    }
+  },
+
+  getUserUnreadCounts(discordId: string, visibleChannelIds: string[]): Map<string, { channelName: string; count: number }> {
+    const result = new Map<string, { channelName: string; count: number }>();
+    if (visibleChannelIds.length === 0) return result;
+
+    for (const channelId of visibleChannelIds) {
+      if (this.isChannelMuted(discordId, channelId)) continue;
+      const lastRead = this.getUserChannelRead(discordId, channelId);
+
+      try {
+        const row = sqliteDb
+          .prepare(`
+            SELECT channel_name, COUNT(*) as cnt
+            FROM channel_buffered_messages
+            WHERE channel_id = ? AND created_at > ?
+          `)
+          .get(channelId, lastRead) as { channel_name: string; cnt: number } | undefined;
+
+        if (row && row.cnt > 0) {
+          result.set(channelId, { channelName: row.channel_name, count: row.cnt });
+        }
+      } catch (e) {
+        console.error('Error counting unread for channel:', e);
+      }
+    }
+    return result;
   },
 };
 

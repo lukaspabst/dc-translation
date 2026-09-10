@@ -27,6 +27,7 @@ import {
   TextChannel,
   ThreadChannel,
   GuildMember,
+  Guild,
 } from 'discord.js';
 import * as dotenv from 'dotenv';
 import * as http from 'http';
@@ -57,7 +58,7 @@ import {
   POPULAR_LANGUAGES,
   getEffectiveLanguage,
 } from './utils/flags';
-import { dbService, initDatabase, PermissionScope, BufferedMessageItem } from './db/database';
+import { dbService, initDatabase, PermissionScope, BufferedMessageItem, ChannelMessageItem } from './db/database';
 import {
   createModernTranslationEmbed,
   createLiveThreadMessageEmbed,
@@ -191,87 +192,94 @@ async function handleAutocompleteInteraction(interaction: AutocompleteInteractio
 
 const lastUnreadMessagePerThread = new Map<string, string>();
 
-async function deliverBufferedMessagesToThread(
+async function deliverChannelCatchupToThread(
   client: Client,
   threadId: string,
   discordId: string,
   channelId?: string
 ): Promise<number> {
-  const buffered = dbService.getBufferedMessages(discordId, channelId);
-  if (buffered.length === 0) return 0;
-
-  dbService.clearBufferedMessages(discordId, channelId);
-
   const thread = (await client.channels.fetch(threadId).catch(() => null)) as ThreadChannel | null;
   if (!thread || !thread.isThread()) return 0;
 
   const prefs = dbService.getUserPreferences(discordId);
 
-  const byChannel = new Map<
-    string,
-    { channelName: string; rawItems: BufferedMessageItem[]; latestUrl: string }
-  >();
-  for (const m of buffered) {
-    let entry = byChannel.get(m.channel_id);
-    if (!entry) {
-      entry = { channelName: m.channel_name, rawItems: [], latestUrl: m.url };
-      byChannel.set(m.channel_id, entry);
+  const channelIdsToProcess: string[] = [];
+  if (channelId && channelId !== 'all') {
+    channelIdsToProcess.push(channelId);
+  } else if (thread.guild) {
+    const member =
+      thread.guild.members.cache.get(discordId) ||
+      (await thread.guild.members.fetch(discordId).catch(() => null));
+    if (member) {
+      const visibleChannels = thread.guild.channels.cache.filter((c) => {
+        if (c.type !== ChannelType.GuildText) return false;
+        const perms = c.permissionsFor(member);
+        return perms ? perms.has('ViewChannel') && perms.has('ReadMessageHistory') : false;
+      });
+      for (const [cId] of visibleChannels) {
+        channelIdsToProcess.push(cId);
+      }
     }
-    entry.rawItems.push(m);
-    entry.latestUrl = m.url;
   }
 
   let totalDelivered = 0;
 
-  for (const [chanId, group] of byChannel.entries()) {
+  for (const cId of channelIdsToProcess) {
+    const unreadItems = dbService.getUnreadMessagesForChannel(discordId, cId);
+    if (unreadItems.length === 0) {
+      dbService.updateUserChannelRead(discordId, cId);
+      continue;
+    }
+
     const validItems: BatchedMessageItem[] = [];
 
-    for (const item of group.rawItems) {
-      let translated = item.translated_text;
-      if (!translated || translated.trim().length === 0) {
-        try {
-          if (prefs.preferred_engine === 'deepl') {
-            translated = await translationService.translateWithDeepL(
-              item.original_text,
-              prefs.target_language
-            );
-          } else {
-            translated = await translationService.translateWithGoogle(
-              item.original_text,
-              prefs.target_language
-            );
-          }
-        } catch (err) {
-          console.error('On-demand translation error:', err);
-          translated = item.original_text;
+    for (const item of unreadItems) {
+      try {
+        let translated: string;
+        if (prefs.preferred_engine === 'deepl') {
+          translated = await translationService.translateWithDeepL(
+            item.original_text,
+            prefs.target_language
+          );
+        } else {
+          translated = await translationService.translateWithGoogle(
+            item.original_text,
+            prefs.target_language
+          );
         }
-      }
 
-      if (translated.trim().toLowerCase() === item.original_text.trim().toLowerCase()) {
-        continue;
-      }
+        if (translated.trim().toLowerCase() === item.original_text.trim().toLowerCase()) {
+          continue;
+        }
 
-      validItems.push({
-        authorName: item.author_name,
-        authorAvatar: item.author_avatar,
-        translatedText: translated,
-        originalText: item.original_text,
-      });
+        validItems.push({
+          authorName: item.author_name,
+          authorAvatar: item.author_avatar,
+          translatedText: translated,
+          originalText: item.original_text,
+        });
+      } catch (err) {
+        console.error('On-demand translation error:', err);
+      }
     }
+
+    dbService.updateUserChannelRead(discordId, cId);
 
     if (validItems.length === 0) continue;
 
+    const channelName = unreadItems[0].channel_name;
     await thread
       .send(
-        `› Focus switched to **#${group.channelName}** (${validItems.length} caught-up message${validItems.length > 1 ? 's' : ''})`
+        `› Focus switched to **#${channelName}** (${validItems.length} caught-up message${validItems.length > 1 ? 's' : ''})`
       )
       .catch(() => {});
 
     const chunkSize = 8;
+    const latestUrl = unreadItems[unreadItems.length - 1].url;
     for (let i = 0; i < validItems.length; i += chunkSize) {
       const chunk = validItems.slice(i, i + chunkSize);
       const embed = createBatchedChannelEmbed({
-        channelName: group.channelName,
+        channelName,
         targetLanguage: prefs.target_language,
         items: chunk,
         showOriginal: prefs.show_original === 1,
@@ -279,13 +287,13 @@ async function deliverBufferedMessagesToThread(
 
       const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
-          .setCustomId(`livethread_mute:${chanId}`)
-          .setLabel(`Mute #${group.channelName}`)
+          .setCustomId(`livethread_mute:${cId}`)
+          .setLabel(`Mute #${channelName}`)
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
           .setLabel('Jump to Message ↗')
           .setStyle(ButtonStyle.Link)
-          .setURL(group.latestUrl)
+          .setURL(latestUrl)
       );
 
       await thread.send({ embeds: [embed], components: [row] }).catch(() => {});
@@ -297,15 +305,37 @@ async function deliverBufferedMessagesToThread(
   return totalDelivered;
 }
 
+const deliverBufferedMessagesToThread = deliverChannelCatchupToThread;
+
 async function notifyThreadUnreadActivity(
   client: Client,
   threadId: string,
-  discordId: string
+  discordId: string,
+  guild?: Guild | null
 ): Promise<void> {
-  const counts = dbService.getBufferedCountsByUser(discordId);
   const thread = (await client.channels.fetch(threadId).catch(() => null)) as ThreadChannel | null;
   if (!thread || !thread.isThread()) return;
 
+  const targetGuild = guild || thread.guild;
+  if (!targetGuild) return;
+
+  const member =
+    targetGuild.members.cache.get(discordId) ||
+    (await targetGuild.members.fetch(discordId).catch(() => null));
+  if (!member) return;
+
+  const currentFocus = dbService.getThreadFocus(threadId);
+
+  const visibleChannelIds = targetGuild.channels.cache
+    .filter((c) => {
+      if (c.type !== ChannelType.GuildText) return false;
+      if (c.id === currentFocus) return false;
+      const perms = c.permissionsFor(member);
+      return perms ? perms.has('ViewChannel') && perms.has('ReadMessageHistory') : false;
+    })
+    .map((c) => c.id);
+
+  const counts = dbService.getUserUnreadCounts(discordId, visibleChannelIds);
   const existingMsgId = lastUnreadMessagePerThread.get(threadId);
 
   if (counts.size === 0) {
@@ -413,6 +443,26 @@ async function handleSelectMenuInteraction(interaction: StringSelectMenuInteract
     const isAll = selectedValue === 'focus:all';
     const targetChannelId = isAll ? 'all' : selectedValue.replace('focus:', '');
 
+    if (!isAll && interaction.guild) {
+      const targetChannel = interaction.guild.channels.cache.get(targetChannelId);
+      if (targetChannel) {
+        const member =
+          interaction.member instanceof GuildMember
+            ? interaction.member
+            : await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+        if (member) {
+          const perms = targetChannel.permissionsFor(member);
+          if (!perms || !perms.has('ViewChannel') || !perms.has('ReadMessageHistory')) {
+            await interaction.reply({
+              content: 'You do not have permission to view this channel.',
+              flags: MessageFlags.Ephemeral,
+            });
+            return;
+          }
+        }
+      }
+    }
+
     dbService.setThreadFocus(threadId, targetChannelId);
 
     let channelName = 'All Channels';
@@ -453,7 +503,7 @@ async function handleSelectMenuInteraction(interaction: StringSelectMenuInteract
       }
     }
 
-    await notifyThreadUnreadActivity(interaction.client, threadId, interaction.user.id);
+    await notifyThreadUnreadActivity(interaction.client, threadId, interaction.user.id, interaction.guild);
 
     await interaction.followUp({
       content: isAll
@@ -1036,6 +1086,26 @@ async function resolveTargetTextChannelForUser(
     const channelId = customId.split(':')[1];
     if (!channelId) return;
 
+    if (interaction.guild) {
+      const targetChannel = interaction.guild.channels.cache.get(channelId);
+      if (targetChannel) {
+        const member =
+          interaction.member instanceof GuildMember
+            ? interaction.member
+            : await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+        if (member) {
+          const perms = targetChannel.permissionsFor(member);
+          if (!perms || !perms.has('ViewChannel') || !perms.has('ReadMessageHistory')) {
+            await interaction.reply({
+              content: 'You do not have permission to view this channel.',
+              flags: MessageFlags.Ephemeral,
+            }).catch(() => {});
+            return;
+          }
+        }
+      }
+    }
+
     await interaction.deferUpdate().catch(() => {});
 
     const thread = interaction.channel as ThreadChannel | null;
@@ -1056,7 +1126,7 @@ async function resolveTargetTextChannelForUser(
         await thread.send(`› Focus switched to **${channelName}**`).catch(() => {});
       }
 
-      await notifyThreadUnreadActivity(interaction.client, thread.id, interaction.user.id);
+      await notifyThreadUnreadActivity(interaction.client, thread.id, interaction.user.id, interaction.guild);
     }
     return;
   }
@@ -1084,7 +1154,7 @@ async function resolveTargetTextChannelForUser(
       }
     }
 
-    await notifyThreadUnreadActivity(interaction.client, threadId, interaction.user.id);
+    await notifyThreadUnreadActivity(interaction.client, threadId, interaction.user.id, interaction.guild);
     return;
   }
 
@@ -1709,6 +1779,18 @@ client.on(Events.MessageCreate, async (message: Message) => {
         }
       }
 
+      dbService.saveChannelMessage({
+        id: message.id,
+        guild_id: message.guild.id,
+        channel_id: textChannel.id,
+        channel_name: textChannel.name,
+        author_name: message.author.displayName || message.author.username,
+        author_avatar: message.author.displayAvatarURL({ size: 64 }),
+        original_text: message.content,
+        url: message.url,
+        created_at: Math.floor(message.createdTimestamp / 1000),
+      });
+
       const liveThreads = dbService.getLiveThreadsForGuild(message.guild.id);
       for (const lt of liveThreads) {
         if (lt.discord_id === message.author.id) continue;
@@ -1748,6 +1830,7 @@ client.on(Events.MessageCreate, async (message: Message) => {
           const authorAvatar = message.author.displayAvatarURL({ size: 64 });
 
           if (isFocused) {
+            dbService.updateUserChannelRead(lt.discord_id, textChannel.id, Math.floor(Date.now() / 1000));
             enqueueThreadMessage({
               threadId: lt.thread_id,
               threadUserId: lt.discord_id,
@@ -1766,18 +1849,7 @@ client.on(Events.MessageCreate, async (message: Message) => {
               client,
             });
           } else {
-            dbService.saveBufferedMessage({
-              discord_id: lt.discord_id,
-              channel_id: textChannel.id,
-              channel_name: channelName,
-              author_name: authorName,
-              author_avatar: authorAvatar,
-              original_text: message.content,
-              translated_text: '',
-              url: message.url,
-            });
-
-            await notifyThreadUnreadActivity(client, lt.thread_id, lt.discord_id);
+            await notifyThreadUnreadActivity(client, lt.thread_id, lt.discord_id, message.guild);
           }
         } catch (err) {
           console.error('Error queuing batched thread message:', err);

@@ -89,3 +89,48 @@ export function decryptForUser(ciphertext: string, userId: string): string {
     return ciphertext;
   }
 }
+
+export function getChannelEncryptionKey(channelId: string): Buffer {
+  const masterKey = getEncryptionKey();
+  return createHmac('sha256', masterKey).update(`channel:${channelId}`).digest();
+}
+
+export function encryptForChannel(plaintext: string, channelId: string): string {
+  const key = getChannelEncryptionKey(channelId);
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', key, iv);
+
+  let encrypted = cipher.update(plaintext, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  const authTag = cipher.getAuthTag().toString('hex');
+
+  return `${iv.toString('hex')}:${authTag}:${encrypted}`;
+}
+
+export function decryptForChannel(ciphertext: string, channelId: string): string {
+  if (!ciphertext || !ciphertext.includes(':')) {
+    return ciphertext;
+  }
+
+  const parts = ciphertext.split(':');
+  if (parts.length !== 3) {
+    return ciphertext;
+  }
+
+  const [ivHex, authTagHex, encryptedHex] = parts;
+
+  try {
+    const key = getChannelEncryptionKey(channelId);
+    const iv = Buffer.from(ivHex, 'hex');
+    const authTag = Buffer.from(authTagHex, 'hex');
+    const decipher = createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(authTag);
+
+    let decrypted = decipher.update(encryptedHex, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  } catch (error) {
+    console.error('Channel decryption error, returning raw value:', error);
+    return ciphertext;
+  }
+}
