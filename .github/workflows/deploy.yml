@@ -60,4 +60,4 @@ jobs:
             --memory=512Mi \
             --port=8080 \
             --allow-unauthenticated \
-            --set-env-vars="DISCORD_CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }},GOOGLE_TRANSLATE_API_KEY=${{ secrets.GOOGLE_TRANSLATE_API_KEY }},GCP_PROJECT_ID=${{ env.PROJECT_ID }},DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }},DEEPL_AUTH_KEY=${{ secrets.DEEPL_AUTH_KEY }},MONGODB_URI=${{ secrets.MONGODB_URI }},ENCRYPTION_SECRET_KEY=${{ secrets.ENCRYPTION_SECRET_KEY }},MONGODB_DB_NAME=dc_translation"
+            --set-env-vars="DISCORD_CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }},GOOGLE_TRANSLATE_API_KEY=${{ secrets.GOOGLE_TRANSLATE_API_KEY }},GCP_PROJECT_ID=${{ env.PROJECT_ID }},DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }},DEEPL_AUTH_KEY=${{ secrets.DEEPL_AUTH_KEY }},MONGODB_URI=${{ secrets.MONGODB_URI }},ENCRYPTION_SECRET_KEY=${{ secrets.ENCRYPTION_SECRET_KEY }},MONGODB_DB_NAME=dc_translation,MONGODB_CERT_PEM=${{ secrets.MONGODB_CERT_PEM }}"

@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import { MongoClient, Db, Collection, MongoClientOptions } from 'mongodb';
 import path from 'path';
+import * as fs from 'fs';
 import { encryptField, decryptField } from '../utils/crypto';
 import { setMongoCacheCollection, CachedTranslationDoc } from '../services/cache';
 
@@ -153,7 +154,15 @@ export async function initDatabase(): Promise<void> {
         retryWrites: true,
       };
 
-      if (process.env.MONGODB_CERT_PATH) {
+      if (process.env.MONGODB_CERT_PEM && process.env.MONGODB_CERT_PEM.trim() !== '') {
+        const raw = process.env.MONGODB_CERT_PEM.trim();
+        const content = raw.includes('BEGIN CERTIFICATE')
+          ? raw
+          : Buffer.from(raw, 'base64').toString('utf8');
+        const certPath = path.resolve('/tmp/mongodb-cert.pem');
+        fs.writeFileSync(certPath, content, { mode: 0o600 });
+        options.tlsCertificateKeyFile = certPath;
+      } else if (process.env.MONGODB_CERT_PATH && fs.existsSync(process.env.MONGODB_CERT_PATH)) {
         options.tlsCertificateKeyFile = path.resolve(process.env.MONGODB_CERT_PATH);
       }
 
@@ -184,6 +193,62 @@ export async function initDatabase(): Promise<void> {
                 'INSERT INTO ui_bundles (bundle_key, lang, data, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(bundle_key) DO UPDATE SET data = excluded.data'
               )
               .run(b.bundle_key, b.lang, b.data, b.created_at);
+          } catch {}
+        }
+
+        const storedUsers = await mongoUsersCol.find({}).toArray();
+        for (const u of storedUsers) {
+          try {
+            sqliteDb
+              .prepare(
+                `INSERT INTO users (discord_id, target_language, show_original, flag_duration, flag_mode, auto_translate_dm, auto_translate_thread, preferred_engine, setup_completed)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 ON CONFLICT(discord_id) DO UPDATE SET
+                   target_language = excluded.target_language,
+                   show_original = excluded.show_original,
+                   flag_duration = excluded.flag_duration,
+                   flag_mode = excluded.flag_mode,
+                   auto_translate_dm = excluded.auto_translate_dm,
+                   auto_translate_thread = excluded.auto_translate_thread,
+                   preferred_engine = excluded.preferred_engine,
+                   setup_completed = excluded.setup_completed`
+              )
+              .run(
+                u.discord_id,
+                u.target_language,
+                u.show_original,
+                u.flag_duration,
+                u.flag_mode,
+                u.auto_translate_dm,
+                u.auto_translate_thread,
+                u.preferred_engine,
+                u.setup_completed
+              );
+          } catch {}
+        }
+
+        const storedGuilds = await mongoGuildsCol.find({}).toArray();
+        for (const g of storedGuilds) {
+          try {
+            sqliteDb
+              .prepare(
+                `INSERT INTO guild_settings (guild_id, allow_live_threads, allow_public_translations, flag_channel_reply_allowed, default_mode, broadcast_completed)
+                 VALUES (?, ?, ?, ?, ?, ?)
+                 ON CONFLICT(guild_id) DO UPDATE SET
+                   allow_live_threads = excluded.allow_live_threads,
+                   allow_public_translations = excluded.allow_public_translations,
+                   flag_channel_reply_allowed = excluded.flag_channel_reply_allowed,
+                   default_mode = excluded.default_mode,
+                   broadcast_completed = excluded.broadcast_completed`
+              )
+              .run(
+                g.guild_id,
+                g.allow_live_threads,
+                g.allow_public_translations,
+                g.flag_channel_reply_allowed,
+                g.default_mode,
+                g.broadcast_completed
+              );
           } catch {}
         }
       } catch (bundleSyncErr) {
