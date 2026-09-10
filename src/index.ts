@@ -505,6 +505,45 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     return;
   }
 
+async function resolveTargetTextChannelForUser(
+  client: Client,
+  userId: string,
+  guildId?: string | null
+): Promise<TextChannel | null> {
+  if (guildId) {
+    const guild = client.guilds.cache.get(guildId) || (await client.guilds.fetch(guildId).catch(() => null));
+    if (guild) {
+      const me = guild.members.me || (await guild.members.fetchMe().catch(() => null));
+      if (me) {
+        const ch = guild.channels.cache.find((c) => {
+          if (c.type !== ChannelType.GuildText) return false;
+          const perms = c.permissionsFor(me);
+          return perms ? perms.has('CreatePrivateThreads') : false;
+        }) as TextChannel | undefined;
+        if (ch) return ch;
+      }
+    }
+  }
+
+  for (const guild of client.guilds.cache.values()) {
+    const isMember =
+      guild.members.cache.has(userId) ||
+      (await guild.members.fetch(userId).catch(() => null));
+    if (isMember) {
+      const me = guild.members.me || (await guild.members.fetchMe().catch(() => null));
+      if (me) {
+        const textChannel = guild.channels.cache.find((c) => {
+          if (c.type !== ChannelType.GuildText) return false;
+          const perms = c.permissionsFor(me);
+          return perms ? perms.has('CreatePrivateThreads') : false;
+        }) as TextChannel | undefined;
+        if (textChannel) return textChannel;
+      }
+    }
+  }
+  return null;
+}
+
   if (customId === 'setup_finish') {
     dbService.setSetupCompleted(interaction.user.id, true);
     const prefs = dbService.getUserPreferences(interaction.user.id);
@@ -512,22 +551,25 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     const labels = await getDynamicSetupLabels(effectiveLang);
     const { embed, components } = setupCommand.buildCompletion(prefs, effectiveLang, labels);
 
-    if (
-      prefs.auto_translate_thread &&
-      interaction.guildId &&
-      interaction.channel?.type === ChannelType.GuildText
-    ) {
-      const thread = await ensureLiveThread({
-        channel: interaction.channel as TextChannel,
-        user: interaction.user,
-        targetLanguage: prefs.target_language,
-      });
-      if (thread) {
-        embed.addFields({
-          name: 'Live Thread Ready',
-          value: `Your private thread <#${thread.id}> is active in this channel! Translations will stream automatically.`,
-          inline: false,
+    if (prefs.auto_translate_thread) {
+      const targetChannel = await resolveTargetTextChannelForUser(
+        interaction.client,
+        interaction.user.id,
+        interaction.guildId
+      );
+      if (targetChannel) {
+        const thread = await ensureLiveThread({
+          channel: targetChannel,
+          user: interaction.user,
+          targetLanguage: prefs.target_language,
         });
+        if (thread) {
+          embed.addFields({
+            name: 'Live Thread Ready',
+            value: `Your private thread <#${thread.id}> is active in #${targetChannel.name}! Translations will stream automatically.`,
+            inline: false,
+          });
+        }
       }
     }
 
@@ -558,22 +600,25 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     const labels = await getDynamicSetupLabels(effectiveLang);
     const { embed, components } = setupCommand.buildCompletion(prefs, effectiveLang, labels);
 
-    if (
-      prefs.auto_translate_thread &&
-      interaction.guildId &&
-      interaction.channel?.type === ChannelType.GuildText
-    ) {
-      const thread = await ensureLiveThread({
-        channel: interaction.channel as TextChannel,
-        user: interaction.user,
-        targetLanguage: prefs.target_language,
-      });
-      if (thread) {
-        embed.addFields({
-          name: 'Live Thread Ready',
-          value: `Your private thread <#${thread.id}> is active in this channel! Translations will stream automatically.`,
-          inline: false,
+    if (prefs.auto_translate_thread) {
+      const targetChannel = await resolveTargetTextChannelForUser(
+        interaction.client,
+        interaction.user.id,
+        interaction.guildId
+      );
+      if (targetChannel) {
+        const thread = await ensureLiveThread({
+          channel: targetChannel,
+          user: interaction.user,
+          targetLanguage: prefs.target_language,
         });
+        if (thread) {
+          embed.addFields({
+            name: 'Live Thread Ready',
+            value: `Your private thread <#${thread.id}> is active in #${targetChannel.name}! Translations will stream automatically.`,
+            inline: false,
+          });
+        }
       }
     }
 
@@ -1390,10 +1435,30 @@ client.on(Events.MessageCreate, async (message: Message) => {
     const threadsAllowed = guildSettings.allow_live_threads !== 'disabled';
 
     if (threadsAllowed) {
+      const autoThreadUsers = dbService.getAllAutoTranslateThreadUsers();
+      for (const autoUser of autoThreadUsers) {
+        if (!dbService.getUserLiveThread(autoUser.discord_id, message.guild.id)) {
+          const member =
+            message.guild.members.cache.get(autoUser.discord_id) ||
+            (await message.guild.members.fetch(autoUser.discord_id).catch(() => null));
+          if (member) {
+            if (
+              guildSettings.allow_live_threads !== 'admin_only' ||
+              member.permissions.has('ManageGuild') ||
+              member.permissions.has('Administrator')
+            ) {
+              await ensureLiveThread({
+                channel: textChannel,
+                user: member.user,
+                targetLanguage: autoUser.target_language,
+              }).catch(() => null);
+            }
+          }
+        }
+      }
+
       const liveThreads = dbService.getLiveThreadsForGuild(message.guild.id);
       for (const lt of liveThreads) {
-        if (lt.discord_id === message.author.id) continue;
-
         try {
           const member =
             message.guild.members.cache.get(lt.discord_id) ||
@@ -1432,6 +1497,7 @@ client.on(Events.MessageCreate, async (message: Message) => {
 
           enqueueThreadMessage({
             threadId: lt.thread_id,
+            threadUserId: lt.discord_id,
             channelId: textChannel.id,
             channelName,
             targetLanguage: lt.target_language,
@@ -1439,6 +1505,7 @@ client.on(Events.MessageCreate, async (message: Message) => {
             message: {
               id: message.id,
               content: message.content,
+              authorId: message.author.id,
               authorName,
               authorAvatar,
               url: message.url,

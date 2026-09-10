@@ -11,6 +11,7 @@ import { createBatchedChannelEmbed, BatchedMessageItem } from '../utils/embeds';
 interface QueuedMessage {
   id: string;
   content: string;
+  authorId?: string;
   authorName: string;
   authorAvatar?: string;
   url: string;
@@ -18,6 +19,7 @@ interface QueuedMessage {
 
 interface ChannelBatch {
   threadId: string;
+  threadUserId?: string;
   channelId: string;
   channelName: string;
   targetLanguage: string;
@@ -32,6 +34,7 @@ const MAX_BATCH_SIZE = 8;
 
 export function enqueueThreadMessage(params: {
   threadId: string;
+  threadUserId?: string;
   channelId: string;
   channelName: string;
   targetLanguage: string;
@@ -39,14 +42,23 @@ export function enqueueThreadMessage(params: {
   message: {
     id: string;
     content: string;
+    authorId?: string;
     authorName: string;
     authorAvatar?: string;
     url: string;
   };
   client: Client;
 }): void {
-  const { threadId, channelId, channelName, targetLanguage, showOriginal, message, client } =
-    params;
+  const {
+    threadId,
+    threadUserId,
+    channelId,
+    channelName,
+    targetLanguage,
+    showOriginal,
+    message,
+    client,
+  } = params;
   const key = `${threadId}:${channelId}`;
 
   const existing = activeBatches.get(key);
@@ -65,6 +77,7 @@ export function enqueueThreadMessage(params: {
 
   activeBatches.set(key, {
     threadId,
+    threadUserId,
     channelId,
     channelName,
     targetLanguage,
@@ -87,10 +100,7 @@ async function flushBatch(key: string, client: Client): Promise<void> {
           msg.content,
           batch.targetLanguage
         );
-        if (
-          batch.messages.length === 1 &&
-          translated.trim().toLowerCase() === msg.content.trim().toLowerCase()
-        ) {
+        if (translated.trim().toLowerCase() === msg.content.trim().toLowerCase()) {
           continue;
         }
         validItems.push({

@@ -143,6 +143,7 @@ sqliteDb.exec(`
   CREATE TABLE IF NOT EXISTS live_threads (
     thread_id TEXT PRIMARY KEY,
     discord_id TEXT NOT NULL,
+    guild_id TEXT,
     channel_id TEXT NOT NULL,
     target_language TEXT NOT NULL,
     created_at TEXT NOT NULL
@@ -741,8 +742,8 @@ export const dbService = {
 
     const defaultSettings: GuildSettings = {
       guild_id: guildId,
-      allow_live_threads: 'admin_only',
-      allow_public_translations: 'admin_only',
+      allow_live_threads: 'everyone',
+      allow_public_translations: 'everyone',
       flag_channel_reply_allowed: true,
       default_mode: 'ephemeral',
       broadcast_completed: false,
