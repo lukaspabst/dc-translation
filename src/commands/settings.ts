@@ -111,7 +111,7 @@ export function buildSettingsComponents(
 
   const langSelect = new StringSelectMenuBuilder()
     .setCustomId('settings_select_lang')
-    .setPlaceholder(`${currentLangFlag} ${currentLangName} (${prefs.target_language})`)
+    .setPlaceholder(`${currentLangName} (${prefs.target_language}) — Click here to change`)
     .addOptions(
       POPULAR_LANGUAGES.slice(0, 25).map((l) =>
         new StringSelectMenuOptionBuilder()

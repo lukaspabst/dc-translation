@@ -113,8 +113,8 @@ export function buildStep1(
 
   const placeholderText =
     isSearch && options?.searchResults && options.searchResults.length > 1
-      ? `👉 Choose from ${displayedLanguages.length} matching languages...`
-      : `${currentLang.flag} ${currentLang.name} (${currentLang.code})`;
+      ? `Click here to choose from ${displayedLanguages.length} matching languages...`
+      : `${currentLang.name} (${currentLang.code}) — Click here to change language`;
 
   const select = new StringSelectMenuBuilder()
     .setCustomId('setup_select_lang')
