@@ -99,6 +99,24 @@ export interface BatchedMessageItem {
   originalText?: string;
 }
 
+function getChannelColor(channelName: string): number {
+  let hash = 0;
+  for (let i = 0; i < channelName.length; i++) {
+    hash = (hash << 5) - hash + channelName.charCodeAt(i);
+    hash |= 0;
+  }
+  const colors = [
+    0x8b5cf6,
+    0x3b82f6,
+    0x10b981,
+    0xf59e0b,
+    0xec4899,
+    0x06b6d4,
+    0x6366f1,
+  ];
+  return colors[Math.abs(hash) % colors.length];
+}
+
 export function createBatchedChannelEmbed(options: {
   channelName: string;
   targetLanguage: string;
@@ -108,7 +126,7 @@ export function createBatchedChannelEmbed(options: {
   const { channelName, items, showOriginal = false } = options;
 
   const embed = new EmbedBuilder()
-    .setColor(BOT_VIOLET)
+    .setColor(getChannelColor(channelName))
     .setTitle(`#${channelName} › Transcript`);
 
   if (items.length === 1 && items[0].authorAvatar) {

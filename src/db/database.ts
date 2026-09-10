@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { MongoClient, Db, Collection, MongoClientOptions } from 'mongodb';
 import path from 'path';
 import * as fs from 'fs';
-import { encryptField, decryptField } from '../utils/crypto';
+import { encryptField, decryptField, encryptForUser, decryptForUser } from '../utils/crypto';
 import { setMongoCacheCollection, CachedTranslationDoc } from '../services/cache';
 
 export interface UserPreferences {
@@ -24,6 +24,31 @@ export interface LiveThreadRecord {
   channel_id: string;
   target_language: string;
   created_at: string;
+}
+
+export interface BufferedMessageItem {
+  id: string;
+  channel_id: string;
+  channel_name: string;
+  author_name: string;
+  author_avatar?: string;
+  original_text: string;
+  translated_text: string;
+  url: string;
+  created_at: number;
+}
+
+export interface BufferedMessageRecord {
+  id: string;
+  discord_id: string;
+  channel_id: string;
+  channel_name: string;
+  author_name: string;
+  author_avatar?: string;
+  original_text: string;
+  translated_text: string;
+  url: string;
+  created_at: number;
 }
 
 export interface UserMutedChannelRecord {
@@ -79,6 +104,7 @@ let mongoGuildsCol: Collection<EncryptedGuildRecord> | null = null;
 let mongoLiveThreadsCol: Collection<LiveThreadRecord> | null = null;
 let mongoUiBundlesCol: Collection<UIBundleDoc> | null = null;
 let mongoUserMutedChannelsCol: Collection<UserMutedChannelRecord> | null = null;
+let mongoBufferedMessagesCol: Collection<BufferedMessageRecord> | null = null;
 
 export interface UIBundleDoc {
   bundle_key: string;
@@ -169,6 +195,25 @@ sqliteDb.exec(`
   )
 `);
 
+sqliteDb.exec(`
+  CREATE TABLE IF NOT EXISTS buffered_messages (
+    id TEXT PRIMARY KEY,
+    discord_id TEXT NOT NULL,
+    channel_id TEXT NOT NULL,
+    channel_name TEXT NOT NULL,
+    author_name TEXT NOT NULL,
+    author_avatar TEXT,
+    original_text TEXT NOT NULL,
+    translated_text TEXT NOT NULL,
+    url TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  )
+`);
+
+sqliteDb.exec(`
+  CREATE INDEX IF NOT EXISTS idx_buf_user_chan ON buffered_messages(discord_id, channel_id)
+`);
+
 try {
   sqliteDb.exec('ALTER TABLE users ADD COLUMN auto_translate_dm TEXT');
 } catch {}
@@ -238,6 +283,10 @@ export async function initDatabase(): Promise<void> {
       mongoUserMutedChannelsCol = mongoDb.collection<UserMutedChannelRecord>('user_muted_channels');
       await mongoUserMutedChannelsCol.createIndex({ discord_id: 1, channel_id: 1 }, { unique: true });
       await mongoUserMutedChannelsCol.createIndex({ discord_id: 1, guild_id: 1 });
+
+      mongoBufferedMessagesCol = mongoDb.collection<BufferedMessageRecord>('buffered_messages');
+      await mongoBufferedMessagesCol.createIndex({ created_at: 1 }, { expireAfterSeconds: 7200 });
+      await mongoBufferedMessagesCol.createIndex({ discord_id: 1, channel_id: 1 });
 
       try {
         const storedBundles = await mongoUiBundlesCol.find({}).toArray();
@@ -335,6 +384,32 @@ export async function initDatabase(): Promise<void> {
               .run(m.discord_id, m.channel_id, m.guild_id, m.created_at);
             mutedChannelsCache.add(`${m.discord_id}:${m.channel_id}`);
           } catch {}
+        }
+
+        if (mongoBufferedMessagesCol) {
+          const storedBuffered = await mongoBufferedMessagesCol.find({}).toArray();
+          for (const bm of storedBuffered) {
+            try {
+              sqliteDb
+                .prepare(`
+                  INSERT INTO buffered_messages (id, discord_id, channel_id, channel_name, author_name, author_avatar, original_text, translated_text, url, created_at)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  ON CONFLICT(id) DO NOTHING
+                `)
+                .run(
+                  bm.id,
+                  bm.discord_id,
+                  bm.channel_id,
+                  bm.channel_name,
+                  bm.author_name,
+                  bm.author_avatar || '',
+                  bm.original_text,
+                  bm.translated_text,
+                  bm.url,
+                  bm.created_at
+                );
+            } catch {}
+          }
         }
       } catch (bundleSyncErr) {
         console.warn('UI bundle preload notice:', bundleSyncErr);
@@ -967,6 +1042,132 @@ export const dbService = {
         .run(threadId, channelId);
     } catch (err) {
       console.error('Error setting thread focus in SQLite:', err);
+    }
+  },
+
+  saveBufferedMessage(item: {
+    discord_id: string;
+    channel_id: string;
+    channel_name: string;
+    author_name: string;
+    author_avatar?: string;
+    original_text: string;
+    translated_text: string;
+    url: string;
+  }): void {
+    const id = `${item.channel_id}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+    const encOriginal = encryptForUser(item.original_text, item.discord_id);
+    const encTranslated = encryptForUser(item.translated_text, item.discord_id);
+    const now = Math.floor(Date.now() / 1000);
+
+    try {
+      sqliteDb
+        .prepare(`
+          INSERT INTO buffered_messages (id, discord_id, channel_id, channel_name, author_name, author_avatar, original_text, translated_text, url, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `)
+        .run(
+          id,
+          item.discord_id,
+          item.channel_id,
+          item.channel_name,
+          item.author_name,
+          item.author_avatar || '',
+          encOriginal,
+          encTranslated,
+          item.url,
+          now
+        );
+    } catch (e) {
+      console.error('Error saving buffered message to SQLite:', e);
+    }
+
+    if (mongoBufferedMessagesCol) {
+      mongoBufferedMessagesCol
+        .insertOne({
+          id,
+          discord_id: item.discord_id,
+          channel_id: item.channel_id,
+          channel_name: item.channel_name,
+          author_name: item.author_name,
+          author_avatar: item.author_avatar,
+          original_text: encOriginal,
+          translated_text: encTranslated,
+          url: item.url,
+          created_at: now,
+        })
+        .catch((err) => {
+          console.error('Error syncing buffered message to MongoDB:', err);
+        });
+    }
+  },
+
+  getBufferedMessages(discordId: string, channelId?: string): BufferedMessageItem[] {
+    try {
+      const rows = (
+        channelId
+          ? sqliteDb
+              .prepare('SELECT * FROM buffered_messages WHERE discord_id = ? AND channel_id = ? ORDER BY created_at ASC')
+              .all(discordId, channelId)
+          : sqliteDb
+              .prepare('SELECT * FROM buffered_messages WHERE discord_id = ? ORDER BY created_at ASC')
+              .all(discordId)
+      ) as Array<Record<string, unknown>>;
+
+      return rows.map((r) => ({
+        id: String(r.id),
+        channel_id: String(r.channel_id),
+        channel_name: String(r.channel_name),
+        author_name: String(r.author_name),
+        author_avatar: r.author_avatar ? String(r.author_avatar) : undefined,
+        original_text: decryptForUser(String(r.original_text), discordId),
+        translated_text: decryptForUser(String(r.translated_text), discordId),
+        url: String(r.url),
+        created_at: Number(r.created_at),
+      }));
+    } catch (e) {
+      console.error('Error reading buffered messages:', e);
+      return [];
+    }
+  },
+
+  getBufferedCountsByUser(discordId: string): Map<string, { channelName: string; count: number }> {
+    const result = new Map<string, { channelName: string; count: number }>();
+    try {
+      const rows = sqliteDb
+        .prepare('SELECT channel_id, channel_name, COUNT(*) as cnt FROM buffered_messages WHERE discord_id = ? GROUP BY channel_id, channel_name')
+        .all(discordId) as Array<{ channel_id: string; channel_name: string; cnt: number }>;
+      for (const r of rows) {
+        result.set(r.channel_id, { channelName: r.channel_name, count: r.cnt });
+      }
+    } catch (e) {
+      console.error('Error counting buffered messages:', e);
+    }
+    return result;
+  },
+
+  clearBufferedMessages(discordId: string, channelId?: string): void {
+    try {
+      if (channelId) {
+        sqliteDb
+          .prepare('DELETE FROM buffered_messages WHERE discord_id = ? AND channel_id = ?')
+          .run(discordId, channelId);
+      } else {
+        sqliteDb
+          .prepare('DELETE FROM buffered_messages WHERE discord_id = ?')
+          .run(discordId);
+      }
+    } catch (e) {
+      console.error('Error clearing buffered messages in SQLite:', e);
+    }
+
+    if (mongoBufferedMessagesCol) {
+      const filter = channelId
+        ? { discord_id: discordId, channel_id: channelId }
+        : { discord_id: discordId };
+      mongoBufferedMessagesCol.deleteMany(filter).catch((err) => {
+        console.error('Error clearing buffered messages in MongoDB:', err);
+      });
     }
   },
 };

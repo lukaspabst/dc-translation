@@ -29,7 +29,7 @@ interface ChannelBatch {
 }
 
 const activeBatches = new Map<string, ChannelBatch>();
-const BATCH_WINDOW_MS = 1500;
+const BATCH_WINDOW_MS = 3500;
 const MAX_BATCH_SIZE = 8;
 
 export function enqueueThreadMessage(params: {
