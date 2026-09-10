@@ -1,0 +1,63 @@
+name: Deploy DC Translation Bot to GCP
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  PROJECT_ID: journeylink-498811
+  REGION: europe-west1
+  GAR_REPOSITORY: journeylink-repo
+  SERVICE_NAME: dc-translation-bot
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install & Test Build
+        run: |
+          npm ci
+          npm run build
+
+      - name: Google Cloud Authentication
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Setup Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build & Push Docker Image
+        run: |
+          IMAGE_TAG="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/${{ env.SERVICE_NAME }}"
+          docker build -t "$IMAGE_TAG:${{ github.sha }}" -t "$IMAGE_TAG:latest" .
+          docker push "$IMAGE_TAG:${{ github.sha }}"
+          docker push "$IMAGE_TAG:latest"
+
+      - name: Deploy to Cloud Run (Always-On Background Worker)
+        run: |
+          IMAGE_TAG="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/${{ env.SERVICE_NAME }}:${{ github.sha }}"
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image="$IMAGE_TAG" \
+            --region="${{ env.REGION }}" \
+            --platform=managed \
+            --min-instances=1 \
+            --no-cpu-throttling \
+            --memory=512Mi \
+            --port=8080 \
+            --allow-unauthenticated \
+            --set-env-vars="DISCORD_CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }},GOOGLE_TRANSLATE_API_KEY=${{ secrets.GOOGLE_TRANSLATE_API_KEY }},GCP_PROJECT_ID=${{ env.PROJECT_ID }},DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }},DEEPL_AUTH_KEY=${{ secrets.DEEPL_AUTH_KEY }},MONGODB_URI=${{ secrets.MONGODB_URI }},ENCRYPTION_SECRET_KEY=${{ secrets.ENCRYPTION_SECRET_KEY }},MONGODB_DB_NAME=dc_translation"

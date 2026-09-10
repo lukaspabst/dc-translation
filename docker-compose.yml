@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  discord-bot:
+    build: .
+    container_name: dc-translation-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data.db:/app/data.db
+      - ./data.db-wal:/app/data.db-wal
+      - ./data.db-shm:/app/data.db-shm
