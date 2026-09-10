@@ -65,6 +65,7 @@ import {
   getDynamicServerLabels,
   getDynamicUILabels,
 } from './services/uiTranslator';
+import { isPureMediaOrUrl } from './utils/text';
 
 dotenv.config();
 
@@ -1122,7 +1123,7 @@ client.on(Events.MessageReactionAdd, async (reaction: MessageReaction | unknown,
     }
   }
 
-  if (!message.content || message.content.trim() === '') return;
+  if (!message.content || message.content.trim() === '' || isPureMediaOrUrl(message.content)) return;
 
   const emojiName = msgReaction.emoji.name;
   if (!emojiName) return;
@@ -1310,6 +1311,7 @@ client.on(Events.MessageCreate, async (message: Message) => {
   if (message.author.bot || !message.guild) return;
   if (!message.content || message.content.trim().length < 2) return;
   if (message.content.startsWith('/') || message.content.startsWith('!')) return;
+  if (isPureMediaOrUrl(message.content)) return;
 
   const authorPrefs = dbService.getUserPreferences(message.author.id);
   if (!authorPrefs.setup_completed && !dmPromptedUsers.has(message.author.id)) {

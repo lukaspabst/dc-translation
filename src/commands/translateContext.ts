@@ -21,6 +21,7 @@ import {
 import { createModernTranslationEmbed } from '../utils/embeds';
 import { getDynamicUILabels } from '../services/uiTranslator';
 import { UILabels } from '../utils/locales';
+import { isPureMediaOrUrl } from '../utils/text';
 
 export const data = new ContextMenuCommandBuilder()
   .setName('Translate')
@@ -94,7 +95,7 @@ export async function execute(interaction: MessageContextMenuCommandInteraction<
   try {
     const message = interaction.targetMessage;
 
-    if (!message.content || message.content.trim() === '') {
+    if (!message.content || message.content.trim() === '' || isPureMediaOrUrl(message.content)) {
       await interaction.editReply({ content: 'This message has no text to translate.' });
       return;
     }
