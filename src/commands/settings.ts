@@ -100,9 +100,13 @@ export function buildSettingsComponents(
   ActionRowBuilder<ButtonBuilder>
 ] {
   const labels = customLabels || getSettingsLabels(locale);
+  const match = ALL_SUPPORTED_LANGUAGES.find((l) => l.code === prefs.target_language);
+  const currentLangName = getLocalizedLanguageName(prefs.target_language, locale);
+  const currentLangFlag = match?.flag || '🌐';
+
   const langSelect = new StringSelectMenuBuilder()
     .setCustomId('settings_select_lang')
-    .setPlaceholder(labels.langPlaceholder)
+    .setPlaceholder(`${currentLangFlag} ${currentLangName} (${prefs.target_language})`)
     .addOptions(
       POPULAR_LANGUAGES.slice(0, 25).map((l) =>
         new StringSelectMenuOptionBuilder()

@@ -109,9 +109,14 @@ export function buildStep1(
     });
   }
 
+  const placeholderText =
+    isSearch && options?.searchResults && options.searchResults.length > 1
+      ? `👉 Choose from ${displayedLanguages.length} matching languages...`
+      : `${currentLang.flag} ${currentLang.name} (${currentLang.code})`;
+
   const select = new StringSelectMenuBuilder()
     .setCustomId('setup_select_lang')
-    .setPlaceholder(labels.selectPlaceholder)
+    .setPlaceholder(placeholderText)
     .addOptions(
       displayedLanguages.slice(0, 25).map((l) =>
         new StringSelectMenuOptionBuilder()
@@ -124,17 +129,7 @@ export function buildStep1(
 
   const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
 
-  const actionRow = new ActionRowBuilder<ButtonBuilder>();
-  if (isSearch) {
-    actionRow.addComponents(
-      new ButtonBuilder()
-        .setCustomId('setup_reset_search')
-        .setLabel(labels.resetSearchBtn)
-        .setStyle(ButtonStyle.Secondary)
-    );
-  }
-
-  actionRow.addComponents(
+  const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId('setup_open_search_modal')
       .setLabel(labels.searchBtn)

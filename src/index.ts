@@ -328,6 +328,14 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     return;
   }
 
+  if (customId === 'setup_reset_search') {
+    const prefs = dbService.getUserPreferences(interaction.user.id);
+    const labels = await getDynamicSetupLabels(interaction.locale);
+    const { embed, components } = setupCommand.buildStep1(prefs, interaction.locale, labels);
+    await interaction.update({ embeds: [embed], components });
+    return;
+  }
+
   if (customId.startsWith('setup_page:')) {
     const pageStr = customId.split(':')[1];
     const page = parseInt(pageStr, 10) || 0;
@@ -912,6 +920,9 @@ async function handleModalSubmitInteraction(interaction: ModalSubmitInteraction)
 
     if (matches.length === 1) {
       dbService.setUserLanguage(interaction.user.id, matches[0].code);
+      if (interaction.guild) {
+        await syncUserLiveThreadLanguage(interaction.guild, interaction.user.id, matches[0].code);
+      }
       const prefs = dbService.getUserPreferences(interaction.user.id);
       const { embed, components } = setupCommand.buildStep1(prefs, interaction.locale, labels, {
         page: 0,
