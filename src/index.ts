@@ -476,7 +476,7 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       });
       if (thread) {
         embed.addFields({
-          name: 'Live Split-Screen Ready',
+          name: 'Live Thread Ready',
           value: `Your private thread <#${thread.id}> is active in this channel! Translations will stream automatically.`,
           inline: false,
         });
@@ -522,7 +522,7 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       });
       if (thread) {
         embed.addFields({
-          name: 'Live Split-Screen Ready',
+          name: 'Live Thread Ready',
           value: `Your private thread <#${thread.id}> is active in this channel! Translations will stream automatically.`,
           inline: false,
         });
@@ -690,7 +690,7 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({
         content:
-          'Live translation feed stopped and thread archived. You can restart anytime by clicking Split-Screen on any translation.',
+          'Live translation feed stopped and thread archived. You can restart anytime by clicking Live Thread on any translation.',
         flags: MessageFlags.Ephemeral,
       }).catch(() => {});
     }
@@ -706,7 +706,7 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
 
     if (!interaction.guildId) {
       await interaction.reply({
-        content: 'Split-Screen translation is only available in server channels.',
+        content: 'Live thread translation is only available in server channels.',
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -739,7 +739,7 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       const channel = await client.channels.fetch(channelId);
       if (!channel || channel.type !== ChannelType.GuildText) {
         await interaction.editReply({
-          content: 'Live split-screen threads can only be opened in standard text channels.',
+          content: 'Live translation threads can only be opened in standard text channels.',
         });
         return;
       }
@@ -790,20 +790,20 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
 
       const threadRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
-          .setLabel('Open Split-Screen ↗')
+          .setLabel('Open Live Thread ↗')
           .setStyle(ButtonStyle.Link)
           .setURL(`https://discord.com/channels/${interaction.guildId}/${thread.id}`)
       );
 
       await interaction.editReply({
-        content: `Live Split-Screen active: <#${thread.id}>\nTranslations in this channel will stream directly to your private thread!`,
+        content: `Live translation thread active: <#${thread.id}>\nTranslations in this channel will stream directly to your private thread!`,
         components: [threadRow],
       });
     } catch (err: unknown) {
       console.error('Error opening live thread:', err);
       const errMsg = err instanceof Error ? err.message : 'Unknown error';
       await interaction.editReply({
-        content: `Error opening split-screen thread: ${errMsg}`,
+        content: `Error opening live thread: ${errMsg}`,
       });
     }
     return;

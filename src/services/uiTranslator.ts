@@ -16,10 +16,10 @@ import {
 const BASE_SETUP_TEMPLATE: Record<string, string> = {
   interceptTitle: 'Welcome to Translation',
   interceptDesc:
-    'Hello {user}! Translation translates messages live in Split-Screen or on-demand.\n\nClick below to adopt your Discord client language or choose any language manually:',
+    'Hello {user}! Translation translates messages live in a private thread or on-demand.\n\nClick below to adopt your Discord client language or choose any language manually:',
   interceptPresetTitle: 'Recommended Default Setup',
   interceptPresetBody:
-    '• Mode: Live Split-Screen Feed (Automatic private thread beside chat)\n• Engine: Google Cloud (Fast, supporting 135+ languages)\n• Flag Auto-Delete: 3 minutes (Keeps channels clean)\n• Show Original: Enabled (Compare translation with original quote)',
+    '• Mode: Private Live Thread (Automatic thread beside chat)\n• Engine: Google Cloud (Fast, supporting 135+ languages)\n• Flag Auto-Delete: 3 minutes (Keeps channels clean)\n• Show Original: Enabled (Compare translation with original quote)',
   detectClientBtn: 'Use Discord Client Language',
   manualChooseBtn: 'Choose Language Manually',
   detectedLangField: 'Detected Language',
@@ -31,7 +31,7 @@ const BASE_SETUP_TEMPLATE: Record<string, string> = {
     'Your Discord language was detected as: {lang} ({code}). Do you want to use this language for your translations or pick another?',
   clientDetectedPreset: 'Recommended Configuration',
   clientDetectedPresetBody:
-    '• Target Language: Configured\n• Mode: Live Split-Screen Feed (Private thread)\n• Engine: Google Cloud\n• Flag Auto-Delete: 3 minutes\n• Show Original: Enabled',
+    '• Target Language: Configured\n• Mode: Private Live Thread (Personal thread)\n• Engine: Google Cloud\n• Flag Auto-Delete: 3 minutes\n• Show Original: Enabled',
   useClientLangBtn: 'Use {lang} & Continue ›',
   chooseOtherLangBtn: 'Choose Other Language',
   customizeSetupBtn: 'Customize Setup',
@@ -53,16 +53,16 @@ const BASE_SETUP_TEMPLATE: Record<string, string> = {
   step2Title: 'Step 2 of 3: Choose Delivery Mode',
   step2Desc:
     'Choose how translations are delivered. Select one logical mode (they are mutually exclusive):',
-  threadName: 'Split-Screen Feed (Default & Recommended)',
+  threadName: 'Private Live Thread (Default & Recommended)',
   threadDesc:
-    'Automatically opens a private side-thread beside chat. Translations stream in real time without cluttering main chat.',
+    'Automatically opens a private thread beside chat. Translations stream in real time without cluttering main chat.',
   threadDisabled: 'Disabled by server staff',
   threadStaffOnly: 'Staff only (Prevents channel flooding)',
   threadAvailable: 'Starts automatically in channels (Zero commands needed)',
-  threadBtn: 'Split-Screen Feed',
+  threadBtn: 'Live Thread',
   dmName: 'Direct Messages (DM Feed)',
   dmDesc:
-    'Foreign messages are forwarded directly to your personal Discord DMs. Replaces the Split-Screen thread.',
+    'Foreign messages are forwarded directly to your personal Discord DMs. Replaces the live thread.',
   ephemeralName: 'On-Demand (Manual)',
   ephemeralDesc:
     'No automatic streaming feeds. Translations appear only when you click or react with a flag.',
@@ -91,7 +91,7 @@ const BASE_SETUP_TEMPLATE: Record<string, string> = {
     'Your translation preferences are active and securely saved. You are ready to chat seamlessly across languages.',
   quickTipsTitle: 'Quick Guide',
   quickTipsContent:
-    '• Live Split-Screen: Automatic parallel thread alongside chat (Zero commands needed)\n• Right-click any message › Apps › Translate\n• Preferences: Type /settings anytime to change your delivery mode',
+    '• Private Live Thread: Automatic personal thread alongside chat (Zero commands needed)\n• Right-click any message › Apps › Translate\n• Preferences: Type /settings anytime to change your delivery mode',
   openSettingsBtn: 'View Settings',
 };
 
@@ -101,7 +101,7 @@ const BASE_SETTINGS_TEMPLATE: Record<string, string> = {
   targetLang: 'Target Language',
   targetLangDesc: 'Foreign messages are translated into this language by default.',
   deliveryMode: 'Delivery Mode',
-  modeThread: 'Split-Screen Feed (Recommended)',
+  modeThread: 'Private Live Thread (Recommended)',
   modeThreadDesc: 'Automatic real-time translation stream in a private side-thread beside chat.',
   modeDm: 'Direct Messages (DM Feed)',
   modeDmDesc: 'Automatic translation stream sent directly to your private Discord DMs.',
@@ -127,7 +127,7 @@ const BASE_SETTINGS_TEMPLATE: Record<string, string> = {
   originalShow: 'Original: Show',
   engineToggleGoogle: 'Engine: Google Cloud',
   engineToggleDeepl: 'Engine: DeepL',
-  btnModeThread: 'Split-Screen Feed',
+  btnModeThread: 'Live Thread',
   btnModeDm: 'DM-Feed',
   btnModeManual: 'On-Demand',
   dismissBtn: 'Done',
@@ -168,7 +168,7 @@ const BASE_SERVER_TEMPLATE: Record<string, string> = {
 const BASE_HELP_TEMPLATE: Record<string, string> = {
   title: 'Translation Guide',
   desc: 'High-speed translation bot powered by Google Cloud Translation & DeepL.',
-  sectionPrivate: 'Live Split-Screen (Recommended)',
+  sectionPrivate: 'Private Live Thread (Recommended)',
   sectionPrivateBody:
     'Creates a private thread alongside the channel. Foreign messages are automatically translated in real time without cluttering main chat.',
   sectionFlags: 'Flag Reactions',
@@ -191,7 +191,7 @@ const BASE_UI_TEMPLATE: Record<string, string> = {
   original: 'Original',
   translated: 'Translated',
   deeplBtn: 'DeepL',
-  liveThreadBtn: 'Split-Screen',
+  liveThreadBtn: 'Live Thread',
   requestedBy: 'requested translation:',
   error: 'Translation failed. Please try again.',
   dismiss: 'Dismiss',
@@ -484,7 +484,7 @@ export async function getDynamicSetupLabels(locale?: string): Promise<SetupLabel
   if (['en', 'de', 'es', 'fr', 'it'].includes(norm)) {
     return staticLabels;
   }
-  const translated = await getOrTranslateBundle('setup', norm, BASE_SETUP_TEMPLATE);
+  const translated = await getOrTranslateBundle('setup_v2', norm, BASE_SETUP_TEMPLATE);
   return hydrateSetupLabels(translated);
 }
 
@@ -494,7 +494,7 @@ export async function getDynamicSettingsLabels(locale?: string): Promise<Setting
   if (['en', 'de', 'es', 'fr', 'it'].includes(norm)) {
     return staticLabels;
   }
-  const translated = await getOrTranslateBundle('settings', norm, BASE_SETTINGS_TEMPLATE);
+  const translated = await getOrTranslateBundle('settings_v2', norm, BASE_SETTINGS_TEMPLATE);
   return hydrateSettingsLabels(translated);
 }
 
@@ -504,7 +504,7 @@ export async function getDynamicServerLabels(locale?: string): Promise<ServerLab
   if (['en', 'de', 'es', 'fr', 'it'].includes(norm)) {
     return staticLabels;
   }
-  const translated = await getOrTranslateBundle('server', norm, BASE_SERVER_TEMPLATE);
+  const translated = await getOrTranslateBundle('server_v2', norm, BASE_SERVER_TEMPLATE);
   return hydrateServerLabels(translated);
 }
 
@@ -514,7 +514,7 @@ export async function getDynamicHelpLabels(locale?: string): Promise<HelpLabels>
   if (['en', 'de', 'es', 'fr', 'it'].includes(norm)) {
     return staticLabels;
   }
-  const translated = await getOrTranslateBundle('help', norm, BASE_HELP_TEMPLATE);
+  const translated = await getOrTranslateBundle('help_v2', norm, BASE_HELP_TEMPLATE);
   return hydrateHelpLabels(translated);
 }
 
@@ -524,6 +524,6 @@ export async function getDynamicUILabels(locale?: string): Promise<UILabels> {
   if (['en', 'de', 'es', 'fr', 'it'].includes(norm)) {
     return staticLabels;
   }
-  const translated = await getOrTranslateBundle('ui', norm, BASE_UI_TEMPLATE);
+  const translated = await getOrTranslateBundle('ui_v2', norm, BASE_UI_TEMPLATE);
   return hydrateUILabels(translated);
 }

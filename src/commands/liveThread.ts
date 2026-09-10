@@ -196,8 +196,8 @@ export async function ensureLiveThread(params: {
   }
 
   const existing =
-    dbService.getUserLiveThread(user.id, channel.guildId) ||
-    dbService.getUserLiveThreadInChannel(user.id, channel.id);
+    dbService.getUserLiveThreadInChannel(user.id, channel.id) ||
+    dbService.getUserLiveThread(user.id, channel.guildId);
 
   if (existing) {
     const existingThread = (await channel.guild.channels
@@ -233,6 +233,66 @@ export async function ensureLiveThread(params: {
     dbService.removeLiveThread(existing.thread_id);
   }
 
+  const threadTargetName = `Translations › ${user.username}`;
+  let discordExistingThread: ThreadChannel | null = null;
+
+  const cachedThread = channel.threads.cache.find(
+    (t) =>
+      t.isThread() &&
+      t.parentId === channel.id &&
+      (t.name === threadTargetName || t.name === `Translations - ${user.username}`)
+  );
+  if (cachedThread) {
+    discordExistingThread = cachedThread;
+  }
+
+  if (!discordExistingThread) {
+    try {
+      const active = await channel.threads.fetchActive();
+      const matches = active.threads.filter(
+        (t) => t.name === threadTargetName || t.name === `Translations - ${user.username}`
+      );
+      if (matches.size > 0) {
+        discordExistingThread =
+          matches.sort((a, b) => (b.createdTimestamp || 0) - (a.createdTimestamp || 0)).first() || null;
+      }
+    } catch (e) {
+      console.warn('Could not fetch active threads from channel:', e);
+    }
+  }
+
+  if (!discordExistingThread) {
+    try {
+      const archived = await channel.threads.fetchArchived({ type: 'private', fetchAll: false });
+      const matches = archived.threads.filter(
+        (t) => t.name === threadTargetName || t.name === `Translations - ${user.username}`
+      );
+      if (matches.size > 0) {
+        discordExistingThread =
+          matches.sort((a, b) => (b.createdTimestamp || 0) - (a.createdTimestamp || 0)).first() || null;
+      }
+    } catch (e) {
+      console.warn('Could not fetch archived private threads from channel:', e);
+    }
+  }
+
+  if (discordExistingThread) {
+    if (discordExistingThread.archived) {
+      await discordExistingThread.setArchived(false).catch(() => {});
+    }
+    await discordExistingThread.members.add(user.id).catch(() => {});
+
+    dbService.registerLiveThread(
+      user.id,
+      channel.guildId,
+      channel.id,
+      discordExistingThread.id,
+      targetLanguage
+    );
+
+    return discordExistingThread;
+  }
+
   const langInfo =
     POPULAR_LANGUAGES.find((l) => l.code === targetLanguage) || {
       name: targetLanguage.toUpperCase(),
@@ -241,7 +301,7 @@ export async function ensureLiveThread(params: {
 
   try {
     const thread = await channel.threads.create({
-      name: `Translations › ${user.username}`,
+      name: threadTargetName,
       autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
       type: ChannelType.PrivateThread,
       reason: `Private live translation thread for ${user.username}`,
@@ -259,7 +319,7 @@ export async function ensureLiveThread(params: {
 
     const welcomeEmbed = new EmbedBuilder()
       .setColor('#8B5CF6')
-      .setTitle('Live Split-Screen Translation')
+      .setTitle('Live Translation Thread')
       .setDescription(
         `Any messages sent in <#${channel.id}> in other languages will be automatically translated and posted here in real time.`
       )

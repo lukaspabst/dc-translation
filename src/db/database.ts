@@ -67,6 +67,7 @@ let mongoClient: MongoClient | null = null;
 let mongoDb: Db | null = null;
 let mongoUsersCol: Collection<EncryptedUserRecord> | null = null;
 let mongoGuildsCol: Collection<EncryptedGuildRecord> | null = null;
+let mongoLiveThreadsCol: Collection<LiveThreadRecord> | null = null;
 let mongoUiBundlesCol: Collection<UIBundleDoc> | null = null;
 
 export interface UIBundleDoc {
@@ -184,6 +185,10 @@ export async function initDatabase(): Promise<void> {
       mongoUiBundlesCol = mongoDb.collection<UIBundleDoc>('ui_bundles');
       await mongoUiBundlesCol.createIndex({ bundle_key: 1 }, { unique: true });
 
+      mongoLiveThreadsCol = mongoDb.collection<LiveThreadRecord>('live_threads');
+      await mongoLiveThreadsCol.createIndex({ thread_id: 1 }, { unique: true });
+      await mongoLiveThreadsCol.createIndex({ discord_id: 1, guild_id: 1 });
+
       try {
         const storedBundles = await mongoUiBundlesCol.find({}).toArray();
         for (const b of storedBundles) {
@@ -193,6 +198,24 @@ export async function initDatabase(): Promise<void> {
                 'INSERT INTO ui_bundles (bundle_key, lang, data, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(bundle_key) DO UPDATE SET data = excluded.data'
               )
               .run(b.bundle_key, b.lang, b.data, b.created_at);
+          } catch {}
+        }
+
+        const storedThreads = await mongoLiveThreadsCol.find({}).toArray();
+        for (const t of storedThreads) {
+          try {
+            sqliteDb
+              .prepare(
+                `INSERT INTO live_threads (thread_id, discord_id, guild_id, channel_id, target_language, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?)
+                 ON CONFLICT(thread_id) DO UPDATE SET
+                   discord_id = excluded.discord_id,
+                   guild_id = excluded.guild_id,
+                   channel_id = excluded.channel_id,
+                   target_language = excluded.target_language,
+                   created_at = excluded.created_at`
+              )
+              .run(t.thread_id, t.discord_id, t.guild_id, t.channel_id, t.target_language, t.created_at);
           } catch {}
         }
 
@@ -496,6 +519,30 @@ export const dbService = {
     } catch (err) {
       console.error('Error registering live thread:', err);
     }
+
+    if (mongoLiveThreadsCol) {
+      const col = mongoLiveThreadsCol;
+      col.deleteMany({ discord_id: discordId, guild_id: guildId })
+        .then(() =>
+          col.updateOne(
+            { thread_id: threadId },
+            {
+              $set: {
+                thread_id: threadId,
+                discord_id: discordId,
+                guild_id: guildId,
+                channel_id: channelId,
+                target_language: targetLanguage,
+                created_at: now,
+              },
+            },
+            { upsert: true }
+          )
+        )
+        .catch((mongoErr) => {
+          console.error('Failed to sync live thread to MongoDB:', mongoErr);
+        });
+    }
   },
 
   updateLiveThreadLanguage(threadId: string, language: string): void {
@@ -505,6 +552,14 @@ export const dbService = {
         .run(language, threadId);
     } catch (err) {
       console.error('Error updating live thread language:', err);
+    }
+
+    if (mongoLiveThreadsCol) {
+      mongoLiveThreadsCol
+        .updateOne({ thread_id: threadId }, { $set: { target_language: language } })
+        .catch((mongoErr) => {
+          console.error('Failed to update live thread in MongoDB:', mongoErr);
+        });
     }
   },
 
@@ -516,6 +571,14 @@ export const dbService = {
     } catch (err) {
       console.error('Error updating user live threads language:', err);
     }
+
+    if (mongoLiveThreadsCol) {
+      mongoLiveThreadsCol
+        .updateMany({ discord_id: discordId }, { $set: { target_language: language } })
+        .catch((mongoErr) => {
+          console.error('Failed to update user live threads in MongoDB:', mongoErr);
+        });
+    }
   },
 
   removeLiveThread(threadId: string): void {
@@ -523,6 +586,14 @@ export const dbService = {
       sqliteDb.prepare('DELETE FROM live_threads WHERE thread_id = ?').run(threadId);
     } catch (err) {
       console.error('Error removing live thread:', err);
+    }
+
+    if (mongoLiveThreadsCol) {
+      mongoLiveThreadsCol
+        .deleteOne({ thread_id: threadId })
+        .catch((mongoErr) => {
+          console.error('Failed to delete live thread from MongoDB:', mongoErr);
+        });
     }
   },
 

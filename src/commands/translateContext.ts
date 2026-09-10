@@ -66,7 +66,7 @@ export function buildTranslationComponents(
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId(`livethread_open:${channelId}:${messageId}:${targetLanguage}`)
-      .setLabel(ui.liveThreadBtn || 'Split-Screen')
+      .setLabel(ui.liveThreadBtn || 'Live Thread')
       .setStyle(ButtonStyle.Secondary)
   );
 

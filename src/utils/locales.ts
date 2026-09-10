@@ -168,7 +168,7 @@ const UI_DICTIONARIES: Record<string, UILabels> = {
     original: 'Original',
     translated: 'Translated',
     deeplBtn: 'DeepL',
-    liveThreadBtn: 'Split-Screen',
+    liveThreadBtn: 'Live Thread',
     requestedBy: 'requested translation:',
     error: 'Translation failed. Please try again.',
     dismiss: 'Dismiss',
@@ -180,7 +180,7 @@ const UI_DICTIONARIES: Record<string, UILabels> = {
     original: 'Original',
     translated: 'Übersetzt',
     deeplBtn: 'DeepL',
-    liveThreadBtn: 'Split-Screen',
+    liveThreadBtn: 'Live-Thread',
     requestedBy: 'hat eine Übersetzung angefordert:',
     error: 'Übersetzung fehlgeschlagen. Bitte versuche es erneut.',
     dismiss: 'Schließen',
@@ -192,7 +192,7 @@ const UI_DICTIONARIES: Record<string, UILabels> = {
     original: 'Original',
     translated: 'Traducido',
     deeplBtn: 'DeepL',
-    liveThreadBtn: 'Split-Screen',
+    liveThreadBtn: 'Hilo en vivo',
     requestedBy: 'solicitó una traducción:',
     error: 'Error al traducir. Inténtalo de nuevo.',
     dismiss: 'Descartar',
@@ -204,7 +204,7 @@ const UI_DICTIONARIES: Record<string, UILabels> = {
     original: 'Original',
     translated: 'Traduit',
     deeplBtn: 'DeepL',
-    liveThreadBtn: 'Split-Screen',
+    liveThreadBtn: 'Fil en direct',
     requestedBy: 'a demandé une traduction :',
     error: 'Échec de la traduction. Veuillez réessayer.',
     dismiss: 'Fermer',
@@ -216,7 +216,7 @@ const UI_DICTIONARIES: Record<string, UILabels> = {
     original: 'Originale',
     translated: 'Tradotto',
     deeplBtn: 'DeepL',
-    liveThreadBtn: 'Split-Screen',
+    liveThreadBtn: 'Thread Live',
     requestedBy: 'ha richiesto una traduzione:',
     error: 'Traduzione non riuscita. Riprova.',
     dismiss: 'Chiudi',
@@ -229,10 +229,10 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
   en: {
     interceptTitle: 'Welcome to Translation',
     interceptDesc: (user) =>
-      `Hello ${user}! Translation translates messages live in Split-Screen or on-demand.\n\nClick below to adopt your Discord client language or choose any language manually:`,
+      `Hello ${user}! Translation translates messages live in a private thread or on-demand.\n\nClick below to adopt your Discord client language or choose any language manually:`,
     interceptPresetTitle: 'Recommended Default Setup',
     interceptPresetBody: [
-      '• Mode: Live Split-Screen Feed (Automatic private thread beside chat)',
+      '• Mode: Private Live Thread (Automatic thread beside chat)',
       '• Engine: Google Cloud (Fast, 135+ languages)',
       '• Flag Auto-Delete: 3 minutes (Keeps channels clean)',
       '• Show Original: Enabled (Compare translation with original quote)',
@@ -250,7 +250,7 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
     clientDetectedPreset: 'Recommended Configuration',
     clientDetectedPresetBody: [
       '• Target Language: Configured',
-      '• Mode: Live Split-Screen Feed (Private thread)',
+      '• Mode: Private Live Thread (Personal thread)',
       '• Engine: Google Cloud',
       '• Flag Auto-Delete: 3 minutes',
       '• Show Original: Enabled',
@@ -277,16 +277,16 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
     step2Title: 'Step 2 of 3: Choose Delivery Mode',
     step2Desc:
       'Choose how translations are delivered. Select one logical mode (they are mutually exclusive):',
-    threadName: 'Split-Screen Feed (Default & Recommended)',
+    threadName: 'Private Live Thread (Default & Recommended)',
     threadDesc:
-      'Automatically opens a private side-thread beside chat. Translations stream in real time without cluttering main chat.',
+      'Automatically opens a private thread beside chat. Translations stream in real time without cluttering main chat.',
     threadDisabled: 'Disabled by server staff',
     threadStaffOnly: 'Staff only (Prevents channel flooding)',
     threadAvailable: 'Starts automatically in channels (Zero commands needed)',
-    threadBtn: 'Split-Screen Feed',
+    threadBtn: 'Live Thread',
     dmName: 'Direct Messages (DM Feed)',
     dmDesc:
-      'Foreign messages are forwarded directly to your personal Discord DMs. Replaces the Split-Screen thread.',
+      'Foreign messages are forwarded directly to your personal Discord DMs. Replaces the live thread.',
     ephemeralName: 'On-Demand (Manual)',
     ephemeralDesc:
       'No automatic streaming feeds. Translations appear only when you click or react with a flag.',
@@ -316,7 +316,7 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
       'Your translation preferences are active and securely saved. You are ready to chat seamlessly across languages.',
     quickTipsTitle: 'Quick Guide',
     quickTipsContent: [
-      '• Live Split-Screen: Automatic parallel thread alongside chat (Zero commands needed)',
+      '• Private Live Thread: Automatic personal thread alongside chat (Zero commands needed)',
       '• Right-click any message › Apps › Translate',
       '• Preferences: Type /settings anytime to change your delivery mode',
     ].join('\n'),
@@ -325,10 +325,10 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
   de: {
     interceptTitle: 'Willkommen bei Translation',
     interceptDesc: (user) =>
-      `Hallo ${user}! Der Translation-Bot übersetzt fremde Nachrichten automatisch live im Split-Screen oder auf Abruf.\n\nKlicke unten, um deine persönliche Discord-Sprache direkt zu übernehmen oder eine Sprache manuell zu wählen:`,
+      `Hallo ${user}! Der Translation-Bot übersetzt fremde Nachrichten automatisch live im privaten Thread oder auf Abruf.\n\nKlicke unten, um deine persönliche Discord-Sprache direkt zu übernehmen oder eine Sprache manuell zu wählen:`,
     interceptPresetTitle: 'Empfohlene Vorkonfiguration',
     interceptPresetBody: [
-      '• Zustellmodus: Live Split-Screen Feed (Automatischer privater Seiten-Thread neben dem Chat)',
+      '• Zustellmodus: Privater Live-Thread (Automatischer Thread neben dem Chat)',
       '• Engine: Google Cloud (Schnell & über 135 Sprachen)',
       '• Auto-Löschen: 3 Minuten (Hält Server-Kanäle sauber)',
       '• Originaltext: Aktiviert (Zum bequemen Vergleichen als Zitat)',
@@ -346,7 +346,7 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
     clientDetectedPreset: 'Empfohlene Vorkonfiguration',
     clientDetectedPresetBody: [
       '• Zielsprache: Übernommen',
-      '• Zustellmodus: Live Split-Screen Feed (Automatischer privater Thread)',
+      '• Zustellmodus: Privater Live-Thread (Persönlicher Thread)',
       '• Engine: Google Cloud',
       '• Auto-Löschen: 3 Minuten',
       '• Originaltext: Aktiviert',
@@ -373,16 +373,16 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
     step2Title: 'Schritt 2 von 3: Zustellmodus wählen',
     step2Desc:
       'Wähle, wie du Übersetzungen erhalten möchtest. Wähle genau einen Modus (sie schließen sich gegenseitig logisch aus):',
-    threadName: 'Split-Screen Feed (Standard & Empfohlen)',
+    threadName: 'Privater Live-Thread (Standard & Empfohlen)',
     threadDesc:
-      'Öffnet automatisch einen privaten Seiten-Thread neben dem Hauptchat. Übersetzungen streamen live mit, ohne den Chat zu stören.',
+      'Öffnet automatisch einen privaten Thread neben dem Hauptchat. Übersetzungen streamen live mit, ohne den Chat zu stören.',
     threadDisabled: 'Vom Server-Team deaktiviert',
     threadStaffOnly: 'Nur für Moderation',
     threadAvailable: 'Startet automatisch in Kanälen (Kein Befehl nötig)',
-    threadBtn: 'Split-Screen Feed',
+    threadBtn: 'Live-Thread',
     dmName: 'Direktnachrichten (DM-Feed)',
     dmDesc:
-      'Fremde Nachrichten landen automatisch privat in deinen Bot-DMs. Ersetzt den Split-Screen-Thread.',
+      'Fremde Nachrichten landen automatisch privat in deinen Bot-DMs. Ersetzt den Live-Thread.',
     ephemeralName: 'Auf Abruf (Manuell)',
     ephemeralDesc:
       'Keine automatischen Feeds. Übersetzungen erscheinen nur, wenn du gezielt klickst oder Flaggen setzt.',
@@ -412,7 +412,7 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
       'Deine Einstellungen wurden sicher verschlüsselt gespeichert. Du bist sofort startklar!',
     quickTipsTitle: 'Kurzanleitung',
     quickTipsContent: [
-      '• Live Split-Screen: Startet automatisch neben dem Chat (Kein Befehl nötig)',
+      '• Privater Live-Thread: Startet automatisch neben dem Chat (Kein Befehl nötig)',
       '• Rechtsklick auf eine Nachricht › Apps › Übersetzen',
       '• Einstellungen ändern: Tippe jederzeit /settings',
     ].join('\n'),
@@ -421,10 +421,10 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
   es: {
     interceptTitle: 'Bienvenido a Translation',
     interceptDesc: (user) =>
-      `¡Hola ${user}! Translation traduce mensajes entrantes en vivo en Split-Screen o bajo demanda.\n\nHaz clic abajo para adoptar tu idioma de Discord o elegir uno manualmente:`,
+      `¡Hola ${user}! Translation traduce mensajes entrantes en vivo en un hilo privado o bajo demanda.\n\nHaz clic abajo para adoptar tu idioma de Discord o elegir uno manualmente:`,
     interceptPresetTitle: 'Configuración recomendada',
     interceptPresetBody: [
-      '• Modo: Feed Split-Screen en vivo (Hilo privado automático)',
+      '• Modo: Hilo privado en vivo (Hilo personal automático)',
       '• Motor: Google Cloud (Rápido, más de 135 idiomas)',
       '• Auto-eliminación: 3 minutos (Mantiene canales limpios)',
       '• Texto original: Activado (Cita de referencia)',
@@ -442,7 +442,7 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
     clientDetectedPreset: 'Configuración recomendada',
     clientDetectedPresetBody: [
       '• Idioma destino: Configurado',
-      '• Modo: Feed Split-Screen en vivo',
+      '• Modo: Hilo privado en vivo',
       '• Motor: Google Cloud',
       '• Auto-eliminación: 3 minutos',
       '• Texto original: Activado',
@@ -469,16 +469,16 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
     step2Title: 'Paso 2 de 3: Modo de entrega',
     step2Desc:
       'Elige cómo deseas recibir las traducciones (se excluyen mutuamente):',
-    threadName: 'Feed Split-Screen (Predeterminado y recomendado)',
+    threadName: 'Hilo privado en vivo (Predeterminado y recomendado)',
     threadDesc:
-      'Abre automáticamente un hilo privado junto al chat. Las traducciones se transmiten en vivo.',
+      'Abre automáticamente un hilo privado junto al chat. Las traducciones se transmiten en tiempo real.',
     threadDisabled: 'Desactivado por el servidor',
     threadStaffOnly: 'Solo staff',
     threadAvailable: 'Se inicia automáticamente en canales (Sin comandos)',
-    threadBtn: 'Feed Split-Screen',
+    threadBtn: 'Hilo en vivo',
     dmName: 'Mensajes Directos (Feed MD)',
     dmDesc:
-      'Los mensajes se envían directamente a tus MD privados. Reemplaza el hilo de pantalla dividida.',
+      'Los mensajes se envían directamente a tus MD privados. Reemplaza el hilo en vivo.',
     ephemeralName: 'A petición (Manual)',
     ephemeralDesc:
       'Sin transmisiones automáticas. Las traducciones aparecen solo al hacer clic o con banderas.',
@@ -508,7 +508,7 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
       'Tus preferencias han sido guardadas y cifradas. ¡Listo para chatear!',
     quickTipsTitle: 'Guía rápida',
     quickTipsContent: [
-      '• Split-Screen en vivo: Hilo paralelo automático junto al chat (Sin comandos)',
+      '• Hilo privado en vivo: Hilo paralelo automático junto al chat (Sin comandos)',
       '• Clic derecho en un mensaje › Apps › Traducir',
       '• Ajustes: Escribe /settings en cualquier momento',
     ].join('\n'),
@@ -517,10 +517,10 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
   fr: {
     interceptTitle: 'Bienvenue sur Translation',
     interceptDesc: (user) =>
-      `Bonjour ${user} ! Translation traduit les messages entrants en direct en Split-Screen ou sur demande.\n\nCliquez ci-dessous pour adopter la langue de votre Discord ou en choisir une manuellement :`,
+      `Bonjour ${user} ! Translation traduit les messages entrants en direct dans un fil privé ou sur demande.\n\nCliquez ci-dessous pour adopter la langue de votre Discord ou en choisir une manuellement :`,
     interceptPresetTitle: 'Configuration recommandée',
     interceptPresetBody: [
-      '• Mode : Flux Split-Screen en direct (Fil privé automatique)',
+      '• Mode : Fil privé en direct (Fil automatique)',
       '• Moteur : Google Cloud (Rapide, plus de 135 langues)',
       '• Suppression auto : 3 minutes',
       '• Texte original : Activé (Citation de référence)',
@@ -538,7 +538,7 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
     clientDetectedPreset: 'Configuration recommandée',
     clientDetectedPresetBody: [
       '• Langue cible : Configurée',
-      '• Mode : Flux Split-Screen en direct',
+      '• Mode : Fil privé en direct',
       '• Moteur : Google Cloud',
       '• Suppression auto : 3 minutes',
       '• Texte original : Activé',
@@ -565,16 +565,16 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
     step2Title: 'Étape 2 sur 3 : Mode de réception',
     step2Desc:
       'Choisissez comment recevoir vos traductions (modes mutuellement exclusifs) :',
-    threadName: 'Flux Split-Screen (Par défaut et recommandé)',
+    threadName: 'Fil privé en direct (Par défaut et recommandé)',
     threadDesc:
-      'Ouvre automatiquement un fil privé à côté du chat. Les traductions défilent en direct.',
+      'Ouvre automatiquement un fil privé à côté du salon. Les traductions s affichent en temps réel.',
     threadDisabled: 'Désactivé par le serveur',
     threadStaffOnly: 'Réservé aux modérateurs',
     threadAvailable: 'Démarre automatiquement dans les salons (Sans commande)',
-    threadBtn: 'Flux Split-Screen',
+    threadBtn: 'Fil en direct',
     dmName: 'Messages privés (Flux MP)',
     dmDesc:
-      'Les messages sont transférés directement dans vos MP. Remplace le fil split-screen.',
+      'Les messages sont transférés directement dans vos MP. Remplace le fil en direct.',
     ephemeralName: 'À la demande (Manuel)',
     ephemeralDesc:
       'Pas de flux automatique. Les traductions apparaissent sur clic ou avec les drapeaux.',
@@ -604,7 +604,7 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
       'Vos préférences sont enregistrées et chiffrées. Vous êtes prêt à échanger !',
     quickTipsTitle: 'Guide rapide',
     quickTipsContent: [
-      '• Split-Screen direct : Fil parallèle automatique à côté du chat (Sans commande)',
+      '• Fil privé en direct : Fil parallèle automatique à côté du salon (Sans commande)',
       '• Clic droit sur un message › Apps › Traduire',
       '• Paramètres : Tapez /settings à tout moment',
     ].join('\n'),
@@ -613,10 +613,10 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
   it: {
     interceptTitle: 'Benvenuto su Translation',
     interceptDesc: (user) =>
-      `Ciao ${user}! Translation traduce i messaggi in tempo reale in Split-Screen o su richiesta.\n\nFai clic sotto per adottare la lingua del tuo Discord o sceglierne un'altra manualmente:`,
+      `Ciao ${user}! Translation traduce i messaggi in tempo reale in un thread privato o su richiesta.\n\nFai clic sotto per adottare la lingua del tuo Discord o sceglierne un'altra manualmente:`,
     interceptPresetTitle: 'Configurazione consigliata',
     interceptPresetBody: [
-      '• Modalità: Feed Split-Screen in tempo reale (Thread privato automatico)',
+      '• Modalità: Thread privato Live (Thread automatico)',
       '• Motore: Google Cloud (Veloce, oltre 135 lingue)',
       '• Eliminazione automatica: 3 minuti',
       '• Testo originale: Abilitato (Citazione di confronto)',
@@ -634,7 +634,7 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
     clientDetectedPreset: 'Configurazione consigliata',
     clientDetectedPresetBody: [
       '• Lingua di destinazione: Configurato',
-      '• Modalità: Feed Split-Screen in tempo reale',
+      '• Modalità: Thread privato Live',
       '• Motore: Google Cloud',
       '• Eliminazione automatica: 3 minuti',
       '• Testo originale: Abilitato',
@@ -661,16 +661,16 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
     step2Title: 'Passo 2 di 3: Modalità di ricezione',
     step2Desc:
       'Scegli come ricevere le traduzioni (opzioni mutualmente esclusive):',
-    threadName: 'Feed Split-Screen (Predefinito e raccomandato)',
+    threadName: 'Thread privato Live (Predefinito e raccomandato)',
     threadDesc:
-      'Apre automaticamente un thread privato accanto alla chat con le traduzioni in tempo reale.',
+      'Apre automaticamente un thread privato accanto alla chat per traduzioni in tempo reale.',
     threadDisabled: 'Disattivato dal server',
     threadStaffOnly: 'Solo moderatori',
     threadAvailable: 'Si avvia automaticamente nei canali (Nessun comando necessario)',
-    threadBtn: 'Feed Split-Screen',
+    threadBtn: 'Thread Live',
     dmName: 'Messaggi Diretti (Feed DM)',
     dmDesc:
-      'I messaggi vengono inviati direttamente nei tuoi DM privati. Sostituisce il thread split-screen.',
+      'I messaggi vengono inviati direttamente nei tuoi DM privati. Sostituisce il thread live.',
     ephemeralName: 'Su richiesta (Manuale)',
     ephemeralDesc:
       'Nessun feed automatico. Le traduzioni compaiono solo al clic o con le bandiere.',
@@ -700,7 +700,7 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
       'Le tue preferenze sono state salvate e crittografate. Sei pronto a comunicare!',
     quickTipsTitle: 'Guida rapida',
     quickTipsContent: [
-      '• Split-Screen Live: Thread parallelo automatico accanto alla chat (Senza comandi)',
+      '• Thread privato Live: Thread parallelo automatico accanto alla chat (Senza comandi)',
       '• Clic destro su un messaggio › Apps › Translate',
       '• Impostazioni: Usa /settings in qualsiasi momento',
     ].join('\n'),
@@ -733,7 +733,7 @@ const SETTINGS_DICTIONARIES: Record<string, SettingsLabels> = {
     targetLang: 'Target Language',
     targetLangDesc: 'Foreign messages are translated into this language by default.',
     deliveryMode: 'Delivery Mode',
-    modeThread: 'Split-Screen Feed (Recommended)',
+    modeThread: 'Private Live Thread (Recommended)',
     modeThreadDesc: 'Automatic real-time translation stream in a private side-thread beside chat.',
     modeDm: 'Direct Messages (DM Feed)',
     modeDmDesc: 'Automatic translation stream sent directly to your private Discord DMs.',
@@ -756,7 +756,7 @@ const SETTINGS_DICTIONARIES: Record<string, SettingsLabels> = {
     disabled: 'Disabled',
     toggleOriginal: (shown) => (shown ? 'Original: Hide' : 'Original: Show'),
     toggleEngine: (isDeepl) => (isDeepl ? 'Engine: Google Cloud' : 'Engine: DeepL'),
-    btnModeThread: 'Split-Screen Feed',
+    btnModeThread: 'Live Thread',
     btnModeDm: 'DM-Feed',
     btnModeManual: 'On-Demand',
     dismissBtn: 'Done',
@@ -767,7 +767,7 @@ const SETTINGS_DICTIONARIES: Record<string, SettingsLabels> = {
     targetLang: 'Zielsprache',
     targetLangDesc: 'In diese Sprache werden fremde Nachrichten standardmäßig übersetzt.',
     deliveryMode: 'Zustellmodus',
-    modeThread: 'Split-Screen Feed (Empfohlen)',
+    modeThread: 'Privater Live-Thread (Empfohlen)',
     modeThreadDesc: 'Automatischer Feed im privaten Seiten-Thread neben dem Hauptchat.',
     modeDm: 'Direktnachrichten (DM-Feed)',
     modeDmDesc: 'Automatischer Feed direkt in deine privaten Bot-DMs.',
@@ -790,7 +790,7 @@ const SETTINGS_DICTIONARIES: Record<string, SettingsLabels> = {
     disabled: 'Deaktiviert',
     toggleOriginal: (shown) => (shown ? 'Original: Ausblenden' : 'Original: Anzeigen'),
     toggleEngine: (isDeepl) => (isDeepl ? 'Engine: Google Cloud' : 'Engine: DeepL'),
-    btnModeThread: 'Split-Screen Feed',
+    btnModeThread: 'Live-Thread',
     btnModeDm: 'DM-Feed',
     btnModeManual: 'Auf Abruf',
     dismissBtn: 'Fertig',
@@ -801,7 +801,7 @@ const SETTINGS_DICTIONARIES: Record<string, SettingsLabels> = {
     targetLang: 'Idioma destino',
     targetLangDesc: 'Los mensajes extranjeros se traducen a este idioma por defecto.',
     deliveryMode: 'Modo de entrega',
-    modeThread: 'Feed Split-Screen (Recomendado)',
+    modeThread: 'Hilo privado en vivo (Recomendado)',
     modeThreadDesc: 'Transmisión automática en vivo en un hilo privado junto al chat.',
     modeDm: 'Mensajes Directos (Feed MD)',
     modeDmDesc: 'Transmisión automática directa a tus MD privados de Discord.',
@@ -824,7 +824,7 @@ const SETTINGS_DICTIONARIES: Record<string, SettingsLabels> = {
     disabled: 'Desactivado',
     toggleOriginal: (shown) => (shown ? 'Original: Ocultar' : 'Original: Mostrar'),
     toggleEngine: (isDeepl) => (isDeepl ? 'Motor: Google Cloud' : 'Motor: DeepL'),
-    btnModeThread: 'Feed Split-Screen',
+    btnModeThread: 'Hilo en vivo',
     btnModeDm: 'Feed MD',
     btnModeManual: 'A petición',
     dismissBtn: 'Listo',
@@ -835,7 +835,7 @@ const SETTINGS_DICTIONARIES: Record<string, SettingsLabels> = {
     targetLang: 'Langue cible',
     targetLangDesc: 'Les messages étrangers sont traduits vers cette langue par défaut.',
     deliveryMode: 'Mode de réception',
-    modeThread: 'Flux Split-Screen (Recommandé)',
+    modeThread: 'Fil privé en direct (Recommandé)',
     modeThreadDesc: 'Flux automatique en temps réel dans un fil privé à côté du chat.',
     modeDm: 'Messages privés (Flux MP)',
     modeDmDesc: 'Flux automatique envoyé directement dans vos MP Discord privés.',
@@ -858,7 +858,7 @@ const SETTINGS_DICTIONARIES: Record<string, SettingsLabels> = {
     disabled: 'Désactivé',
     toggleOriginal: (shown) => (shown ? 'Original : Masquer' : 'Original : Afficher'),
     toggleEngine: (isDeepl) => (isDeepl ? 'Moteur : Google Cloud' : 'Moteur : DeepL'),
-    btnModeThread: 'Flux Split-Screen',
+    btnModeThread: 'Fil en direct',
     btnModeDm: 'Flux MP',
     btnModeManual: 'À la demande',
     dismissBtn: 'Terminé',
@@ -869,7 +869,7 @@ const SETTINGS_DICTIONARIES: Record<string, SettingsLabels> = {
     targetLang: 'Lingua di destinazione',
     targetLangDesc: 'I messaggi stranieri vengono tradotti in questa lingua per impostazione predefinita.',
     deliveryMode: 'Modalità di ricezione',
-    modeThread: 'Feed Split-Screen (Raccomandato)',
+    modeThread: 'Thread privato Live (Raccomandato)',
     modeThreadDesc: 'Flusso automatico in tempo reale in un thread privato accanto alla chat.',
     modeDm: 'Messaggi Diretti (Feed DM)',
     modeDmDesc: 'Flusso automatico inviato direttamente nei tuoi DM privati di Discord.',
@@ -892,7 +892,7 @@ const SETTINGS_DICTIONARIES: Record<string, SettingsLabels> = {
     disabled: 'Disabilitato',
     toggleOriginal: (shown) => (shown ? 'Originale : Nascondi' : 'Originale : Mostra'),
     toggleEngine: (isDeepl) => (isDeepl ? 'Motore: Google Cloud' : 'Motore: DeepL'),
-    btnModeThread: 'Feed Split-Screen',
+    btnModeThread: 'Thread Live',
     btnModeDm: 'Feed DM',
     btnModeManual: 'Su richiesta',
     dismissBtn: 'Fatto',
@@ -1045,7 +1045,7 @@ const HELP_DICTIONARIES: Record<string, HelpLabels> = {
   en: {
     title: 'Translation Guide',
     desc: 'High-speed translation bot powered by Google Cloud Translation & DeepL.',
-    sectionPrivate: 'Live Split-Screen (Recommended)',
+    sectionPrivate: 'Private Live Thread (Recommended)',
     sectionPrivateBody:
       'Creates a private thread alongside the channel. Foreign messages are automatically translated in real time without cluttering main chat.',
     sectionFlags: 'Flag Reactions',
@@ -1065,7 +1065,7 @@ const HELP_DICTIONARIES: Record<string, HelpLabels> = {
   de: {
     title: 'Übersetzungs-Anleitung',
     desc: 'Hochgeschwindigkeits-Übersetzungs-Bot powered by Google Cloud Translation & DeepL.',
-    sectionPrivate: 'Live Split-Screen (Empfohlen)',
+    sectionPrivate: 'Privater Live-Thread (Empfohlen)',
     sectionPrivateBody:
       'Öffnet einen privaten Thread neben dem Chat. Fremde Nachrichten werden automatisch in Echtzeit übersetzt, ohne den Hauptchat zu stören.',
     sectionFlags: 'Flaggen-Reaktionen',
@@ -1085,7 +1085,7 @@ const HELP_DICTIONARIES: Record<string, HelpLabels> = {
   es: {
     title: 'Guía de traducción',
     desc: 'Bot de traducción de alta velocidad con tecnología de Google Cloud y DeepL.',
-    sectionPrivate: 'Split-Screen en vivo (Recomendado)',
+    sectionPrivate: 'Hilo privado en vivo (Recomendado)',
     sectionPrivateBody:
       'Crea un hilo privado junto al chat. Los mensajes extranjeros se traducen automáticamente en tiempo real.',
     sectionFlags: 'Reacciones con banderas',
@@ -1105,7 +1105,7 @@ const HELP_DICTIONARIES: Record<string, HelpLabels> = {
   fr: {
     title: 'Guide d utilisation',
     desc: 'Bot de traduction ultra-rapide propulsé par Google Cloud Translation et DeepL.',
-    sectionPrivate: 'Split-Screen en direct (Recommandé)',
+    sectionPrivate: 'Fil privé en direct (Recommandé)',
     sectionPrivateBody:
       'Ouvre un fil privé à côté du salon. Les messages sont traduits en temps réel sans encombrer le chat.',
     sectionFlags: 'Réactions drapeaux',
@@ -1125,7 +1125,7 @@ const HELP_DICTIONARIES: Record<string, HelpLabels> = {
   it: {
     title: 'Guida all uso',
     desc: 'Bot di traduzione ad alta velocità basato su Google Cloud Translation e DeepL.',
-    sectionPrivate: 'Split-Screen Live (Raccomandato)',
+    sectionPrivate: 'Thread privato Live (Raccomandato)',
     sectionPrivateBody:
       'Crea un thread privato accanto alla chat per traduzioni in tempo reale senza intasare il canale.',
     sectionFlags: 'Reazioni con bandiere',
