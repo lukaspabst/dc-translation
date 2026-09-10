@@ -11,7 +11,12 @@ import {
   MessageFlags,
 } from 'discord.js';
 import { dbService, UserPreferences } from '../db/database';
-import { POPULAR_LANGUAGES, ALL_SUPPORTED_LANGUAGES, getLocalizedLanguageName } from '../utils/flags';
+import {
+  POPULAR_LANGUAGES,
+  ALL_SUPPORTED_LANGUAGES,
+  getLocalizedLanguageName,
+  getEffectiveLanguage,
+} from '../utils/flags';
 import { getSettingsLabels, SettingsLabels } from '../utils/locales';
 import { getDynamicSettingsLabels } from '../services/uiTranslator';
 
@@ -191,9 +196,10 @@ export function buildSettingsComponents(
 
 export async function execute(interaction: ChatInputCommandInteraction<CacheType>) {
   const prefs = dbService.getUserPreferences(interaction.user.id);
-  const labels = await getDynamicSettingsLabels(interaction.locale);
-  const embed = buildSettingsEmbed(prefs, interaction.locale, labels);
-  const [row1, row2, row3, row4] = buildSettingsComponents(prefs, interaction.locale, labels);
+  const effectiveLang = getEffectiveLanguage(prefs.target_language, interaction.locale);
+  const labels = await getDynamicSettingsLabels(effectiveLang);
+  const embed = buildSettingsEmbed(prefs, effectiveLang, labels);
+  const [row1, row2, row3, row4] = buildSettingsComponents(prefs, effectiveLang, labels);
 
   await interaction.reply({
     embeds: [embed],

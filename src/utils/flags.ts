@@ -440,3 +440,16 @@ export function normalizeLanguageCode(code: string): string {
 
   return aliases[cleanCode] || cleanCode;
 }
+
+export function getEffectiveLanguage(prefsTargetLanguage?: string, interactionLocale?: string): string {
+  if (prefsTargetLanguage && prefsTargetLanguage.trim()) {
+    const clean = prefsTargetLanguage.toLowerCase().trim();
+    if (clean.startsWith('zh-cn') || clean === 'zh-hans') return 'zh-cn';
+    if (clean.startsWith('zh-tw') || clean === 'zh-hant') return 'zh-tw';
+    const normalized = normalizeLanguageCode(clean);
+    const primary = normalized.split('-')[0];
+    const match = ALL_SUPPORTED_LANGUAGES.find((l) => l.code === primary || l.code === normalized);
+    return match ? match.code : primary;
+  }
+  return mapDiscordLocaleToLanguage(interactionLocale);
+}

@@ -21,6 +21,7 @@ import {
   getLocalizedLanguageName,
   getLanguagePage,
   LanguageChoice,
+  getEffectiveLanguage,
 } from '../utils/flags';
 import { getSetupLabels, SetupLabels } from '../utils/locales';
 import { getDynamicSetupLabels } from '../services/uiTranslator';
@@ -54,6 +55,7 @@ export function buildStep1(
     searchQuery?: string;
     searchResults?: readonly LanguageChoice[];
     searchNotice?: string;
+    clientLocale?: string;
   }
 ): {
   embed: EmbedBuilder;
@@ -63,7 +65,7 @@ export function buildStep1(
   ];
 } {
   const labels = customLabels || getSetupLabels(locale);
-  const detectedCode = mapDiscordLocaleToLanguage(locale);
+  const detectedCode = mapDiscordLocaleToLanguage(options?.clientLocale || locale);
   const currentLang = getLanguageInfo(prefs.target_language, locale);
   const detectedLang = getLanguageInfo(detectedCode, locale);
 
@@ -474,6 +476,10 @@ export async function execute(interaction: ChatInputCommandInteraction<CacheType
   const prefs = dbService.getUserPreferences(interaction.user.id);
   if (!prefs.setup_completed) {
     const clientLangCode = mapDiscordLocaleToLanguage(interaction.locale);
+    if (!prefs.target_language || prefs.target_language === 'en') {
+      prefs.target_language = clientLangCode;
+      await dbService.saveUserPreferences(prefs);
+    }
     const labels = await getDynamicSetupLabels(interaction.locale);
     const { embed, components, files } = buildClientDetectedPrompt(
       interaction.user.username,
@@ -489,8 +495,11 @@ export async function execute(interaction: ChatInputCommandInteraction<CacheType
     });
     return;
   }
-  const labels = await getDynamicSetupLabels(interaction.locale);
-  const { embed, components } = buildStep1(prefs, interaction.locale, labels);
+  const effectiveLang = getEffectiveLanguage(prefs.target_language, interaction.locale);
+  const labels = await getDynamicSetupLabels(effectiveLang);
+  const { embed, components } = buildStep1(prefs, effectiveLang, labels, {
+    clientLocale: interaction.locale,
+  });
 
   await interaction.reply({
     embeds: [embed],

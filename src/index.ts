@@ -49,6 +49,7 @@ import {
   mapDiscordLocaleToLanguage,
   searchLanguages,
   POPULAR_LANGUAGES,
+  getEffectiveLanguage,
 } from './utils/flags';
 import { dbService, initDatabase, PermissionScope } from './db/database';
 import { createModernTranslationEmbed, createLiveThreadMessageEmbed } from './utils/embeds';
@@ -186,8 +187,11 @@ async function handleSelectMenuInteraction(interaction: StringSelectMenuInteract
       await syncUserLiveThreadLanguage(interaction.guild, interaction.user.id, selected);
     }
     const prefs = dbService.getUserPreferences(interaction.user.id);
-    const labels = await getDynamicSetupLabels(interaction.locale);
-    const { embed, components } = setupCommand.buildStep1(prefs, interaction.locale, labels);
+    const effectiveLang = getEffectiveLanguage(selected, interaction.locale);
+    const labels = await getDynamicSetupLabels(effectiveLang);
+    const { embed, components } = setupCommand.buildStep1(prefs, effectiveLang, labels, {
+      clientLocale: interaction.locale,
+    });
     await interaction.update({ embeds: [embed], components });
     return;
   }
@@ -199,9 +203,10 @@ async function handleSelectMenuInteraction(interaction: StringSelectMenuInteract
       await syncUserLiveThreadLanguage(interaction.guild, interaction.user.id, selected);
     }
     const prefs = dbService.getUserPreferences(interaction.user.id);
-    const labels = await getDynamicSettingsLabels(interaction.locale);
-    const embed = settingsCommand.buildSettingsEmbed(prefs, interaction.locale, labels);
-    const [row1, row2, row3, row4] = settingsCommand.buildSettingsComponents(prefs, interaction.locale, labels);
+    const effectiveLang = getEffectiveLanguage(selected, interaction.locale);
+    const labels = await getDynamicSettingsLabels(effectiveLang);
+    const embed = settingsCommand.buildSettingsEmbed(prefs, effectiveLang, labels);
+    const [row1, row2, row3, row4] = settingsCommand.buildSettingsComponents(prefs, effectiveLang, labels);
     await interaction.update({ embeds: [embed], components: [row1, row2, row3, row4] });
     return;
   }
@@ -210,9 +215,10 @@ async function handleSelectMenuInteraction(interaction: StringSelectMenuInteract
     const minutes = parseInt(interaction.values[0], 10);
     dbService.setFlagDuration(interaction.user.id, minutes);
     const prefs = dbService.getUserPreferences(interaction.user.id);
-    const labels = await getDynamicSettingsLabels(interaction.locale);
-    const embed = settingsCommand.buildSettingsEmbed(prefs, interaction.locale, labels);
-    const [row1, row2, row3, row4] = settingsCommand.buildSettingsComponents(prefs, interaction.locale, labels);
+    const effectiveLang = getEffectiveLanguage(prefs.target_language, interaction.locale);
+    const labels = await getDynamicSettingsLabels(effectiveLang);
+    const embed = settingsCommand.buildSettingsEmbed(prefs, effectiveLang, labels);
+    const [row1, row2, row3, row4] = settingsCommand.buildSettingsComponents(prefs, effectiveLang, labels);
     await interaction.update({ embeds: [embed], components: [row1, row2, row3, row4] });
     return;
   }
@@ -301,14 +307,19 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
 
   if (customId === 'setup_step:1') {
     const prefs = dbService.getUserPreferences(interaction.user.id);
-    const labels = await getDynamicSetupLabels(interaction.locale);
-    const { embed, components } = setupCommand.buildStep1(prefs, interaction.locale, labels);
+    const effectiveLang = getEffectiveLanguage(prefs.target_language, interaction.locale);
+    const labels = await getDynamicSetupLabels(effectiveLang);
+    const { embed, components } = setupCommand.buildStep1(prefs, effectiveLang, labels, {
+      clientLocale: interaction.locale,
+    });
     await interaction.update({ embeds: [embed], components, files: [] });
     return;
   }
 
   if (customId === 'setup_open_search_modal') {
-    const labels = await getDynamicSetupLabels(interaction.locale);
+    const prefs = dbService.getUserPreferences(interaction.user.id);
+    const effectiveLang = getEffectiveLanguage(prefs.target_language, interaction.locale);
+    const labels = await getDynamicSetupLabels(effectiveLang);
     const modal = new ModalBuilder()
       .setCustomId('setup_search_modal')
       .setTitle(labels.searchModalTitle.slice(0, 45));
@@ -330,8 +341,11 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
 
   if (customId === 'setup_reset_search') {
     const prefs = dbService.getUserPreferences(interaction.user.id);
-    const labels = await getDynamicSetupLabels(interaction.locale);
-    const { embed, components } = setupCommand.buildStep1(prefs, interaction.locale, labels);
+    const effectiveLang = getEffectiveLanguage(prefs.target_language, interaction.locale);
+    const labels = await getDynamicSetupLabels(effectiveLang);
+    const { embed, components } = setupCommand.buildStep1(prefs, effectiveLang, labels, {
+      clientLocale: interaction.locale,
+    });
     await interaction.update({ embeds: [embed], components });
     return;
   }
@@ -340,8 +354,12 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     const pageStr = customId.split(':')[1];
     const page = parseInt(pageStr, 10) || 0;
     const prefs = dbService.getUserPreferences(interaction.user.id);
-    const labels = await getDynamicSetupLabels(interaction.locale);
-    const { embed, components } = setupCommand.buildStep1(prefs, interaction.locale, labels, { page });
+    const effectiveLang = getEffectiveLanguage(prefs.target_language, interaction.locale);
+    const labels = await getDynamicSetupLabels(effectiveLang);
+    const { embed, components } = setupCommand.buildStep1(prefs, effectiveLang, labels, {
+      page,
+      clientLocale: interaction.locale,
+    });
     await interaction.update({ embeds: [embed], components });
     return;
   }
@@ -358,16 +376,18 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       }
     }
     const guildSettings = interaction.guildId ? dbService.getGuildSettings(interaction.guildId) : null;
-    const labels = await getDynamicSetupLabels(interaction.locale);
-    const { embed, components } = setupCommand.buildStep2(prefs, guildSettings, interaction.locale, labels);
+    const effectiveLang = getEffectiveLanguage(prefs.target_language, interaction.locale);
+    const labels = await getDynamicSetupLabels(effectiveLang);
+    const { embed, components } = setupCommand.buildStep2(prefs, guildSettings, effectiveLang, labels);
     await interaction.update({ embeds: [embed], components, files: [] });
     return;
   }
 
   if (customId === 'setup_step:3') {
     const prefs = dbService.getUserPreferences(interaction.user.id);
-    const labels = await getDynamicSetupLabels(interaction.locale);
-    const { embed, components } = setupCommand.buildStep3(prefs, interaction.locale, labels);
+    const effectiveLang = getEffectiveLanguage(prefs.target_language, interaction.locale);
+    const labels = await getDynamicSetupLabels(effectiveLang);
+    const { embed, components } = setupCommand.buildStep3(prefs, effectiveLang, labels);
     await interaction.update({ embeds: [embed], components });
     return;
   }
@@ -379,8 +399,9 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     prefs.flag_mode = 'channel';
     await dbService.saveUserPreferences(prefs);
     const guildSettings = interaction.guildId ? dbService.getGuildSettings(interaction.guildId) : null;
-    const labels = await getDynamicSetupLabels(interaction.locale);
-    const { embed, components } = setupCommand.buildStep2(prefs, guildSettings, interaction.locale, labels);
+    const effectiveLang = getEffectiveLanguage(prefs.target_language, interaction.locale);
+    const labels = await getDynamicSetupLabels(effectiveLang);
+    const { embed, components } = setupCommand.buildStep2(prefs, guildSettings, effectiveLang, labels);
     await interaction.update({ embeds: [embed], components });
     return;
   }
@@ -392,8 +413,9 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     prefs.flag_mode = 'channel';
     await dbService.saveUserPreferences(prefs);
     const guildSettings = interaction.guildId ? dbService.getGuildSettings(interaction.guildId) : null;
-    const labels = await getDynamicSetupLabels(interaction.locale);
-    const { embed, components } = setupCommand.buildStep2(prefs, guildSettings, interaction.locale, labels);
+    const effectiveLang = getEffectiveLanguage(prefs.target_language, interaction.locale);
+    const labels = await getDynamicSetupLabels(effectiveLang);
+    const { embed, components } = setupCommand.buildStep2(prefs, guildSettings, effectiveLang, labels);
     await interaction.update({ embeds: [embed], components });
     return;
   }
@@ -405,8 +427,9 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     prefs.flag_mode = 'channel';
     await dbService.saveUserPreferences(prefs);
     const guildSettings = interaction.guildId ? dbService.getGuildSettings(interaction.guildId) : null;
-    const labels = await getDynamicSetupLabels(interaction.locale);
-    const { embed, components } = setupCommand.buildStep2(prefs, guildSettings, interaction.locale, labels);
+    const effectiveLang = getEffectiveLanguage(prefs.target_language, interaction.locale);
+    const labels = await getDynamicSetupLabels(effectiveLang);
+    const { embed, components } = setupCommand.buildStep2(prefs, guildSettings, effectiveLang, labels);
     await interaction.update({ embeds: [embed], components });
     return;
   }
@@ -415,8 +438,9 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     const prefs = dbService.getUserPreferences(interaction.user.id);
     dbService.setShowOriginal(interaction.user.id, !prefs.show_original);
     const updated = dbService.getUserPreferences(interaction.user.id);
-    const labels = await getDynamicSetupLabels(interaction.locale);
-    const { embed, components } = setupCommand.buildStep3(updated, interaction.locale, labels);
+    const effectiveLang = getEffectiveLanguage(updated.target_language, interaction.locale);
+    const labels = await getDynamicSetupLabels(effectiveLang);
+    const { embed, components } = setupCommand.buildStep3(updated, effectiveLang, labels);
     await interaction.update({ embeds: [embed], components });
     return;
   }
@@ -426,8 +450,9 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     const newEngine = prefs.preferred_engine === 'deepl' ? 'google' : 'deepl';
     dbService.setPreferredEngine(interaction.user.id, newEngine);
     const updated = dbService.getUserPreferences(interaction.user.id);
-    const labels = await getDynamicSetupLabels(interaction.locale);
-    const { embed, components } = setupCommand.buildStep3(updated, interaction.locale, labels);
+    const effectiveLang = getEffectiveLanguage(updated.target_language, interaction.locale);
+    const labels = await getDynamicSetupLabels(effectiveLang);
+    const { embed, components } = setupCommand.buildStep3(updated, effectiveLang, labels);
     await interaction.update({ embeds: [embed], components });
     return;
   }
@@ -435,8 +460,9 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
   if (customId === 'setup_finish') {
     dbService.setSetupCompleted(interaction.user.id, true);
     const prefs = dbService.getUserPreferences(interaction.user.id);
-    const labels = await getDynamicSetupLabels(interaction.locale);
-    const { embed, components } = setupCommand.buildCompletion(prefs, interaction.locale, labels);
+    const effectiveLang = getEffectiveLanguage(prefs.target_language, interaction.locale);
+    const labels = await getDynamicSetupLabels(effectiveLang);
+    const { embed, components } = setupCommand.buildCompletion(prefs, effectiveLang, labels);
 
     if (
       prefs.auto_translate_thread &&
@@ -480,8 +506,9 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     prefs.auto_translate_thread = true;
     prefs.setup_completed = true;
     await dbService.saveUserPreferences(prefs);
-    const labels = await getDynamicSetupLabels(interaction.locale);
-    const { embed, components } = setupCommand.buildCompletion(prefs, interaction.locale, labels);
+    const effectiveLang = getEffectiveLanguage(prefs.target_language, interaction.locale);
+    const labels = await getDynamicSetupLabels(effectiveLang);
+    const { embed, components } = setupCommand.buildCompletion(prefs, effectiveLang, labels);
 
     if (
       prefs.auto_translate_thread &&
@@ -574,9 +601,10 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
 
   if (customId === 'settings_open_from_help') {
     const prefs = dbService.getUserPreferences(interaction.user.id);
-    const labels = await getDynamicSettingsLabels(interaction.locale);
-    const embed = settingsCommand.buildSettingsEmbed(prefs, interaction.locale, labels);
-    const [row1, row2, row3, row4] = settingsCommand.buildSettingsComponents(prefs, interaction.locale, labels);
+    const effectiveLang = getEffectiveLanguage(prefs.target_language, interaction.locale);
+    const labels = await getDynamicSettingsLabels(effectiveLang);
+    const embed = settingsCommand.buildSettingsEmbed(prefs, effectiveLang, labels);
+    const [row1, row2, row3, row4] = settingsCommand.buildSettingsComponents(prefs, effectiveLang, labels);
     await interaction.reply({
       embeds: [embed],
       components: [row1, row2, row3, row4],
@@ -589,9 +617,10 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     const prefs = dbService.getUserPreferences(interaction.user.id);
     dbService.setShowOriginal(interaction.user.id, !prefs.show_original);
     const updated = dbService.getUserPreferences(interaction.user.id);
-    const labels = await getDynamicSettingsLabels(interaction.locale);
-    const embed = settingsCommand.buildSettingsEmbed(updated, interaction.locale, labels);
-    const [row1, row2, row3, row4] = settingsCommand.buildSettingsComponents(updated, interaction.locale, labels);
+    const effectiveLang = getEffectiveLanguage(updated.target_language, interaction.locale);
+    const labels = await getDynamicSettingsLabels(effectiveLang);
+    const embed = settingsCommand.buildSettingsEmbed(updated, effectiveLang, labels);
+    const [row1, row2, row3, row4] = settingsCommand.buildSettingsComponents(updated, effectiveLang, labels);
     await interaction.update({ embeds: [embed], components: [row1, row2, row3, row4] });
     return;
   }
@@ -614,9 +643,10 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     }
     await dbService.saveUserPreferences(prefs);
     const updated = dbService.getUserPreferences(interaction.user.id);
-    const labels = await getDynamicSettingsLabels(interaction.locale);
-    const embed = settingsCommand.buildSettingsEmbed(updated, interaction.locale, labels);
-    const [row1, row2, row3, row4] = settingsCommand.buildSettingsComponents(updated, interaction.locale, labels);
+    const effectiveLang = getEffectiveLanguage(updated.target_language, interaction.locale);
+    const labels = await getDynamicSettingsLabels(effectiveLang);
+    const embed = settingsCommand.buildSettingsEmbed(updated, effectiveLang, labels);
+    const [row1, row2, row3, row4] = settingsCommand.buildSettingsComponents(updated, effectiveLang, labels);
     await interaction.update({ embeds: [embed], components: [row1, row2, row3, row4] });
     return;
   }
@@ -626,9 +656,10 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     const newEngine = prefs.preferred_engine === 'deepl' ? 'google' : 'deepl';
     dbService.setPreferredEngine(interaction.user.id, newEngine);
     const updated = dbService.getUserPreferences(interaction.user.id);
-    const labels = await getDynamicSettingsLabels(interaction.locale);
-    const embed = settingsCommand.buildSettingsEmbed(updated, interaction.locale, labels);
-    const [row1, row2, row3, row4] = settingsCommand.buildSettingsComponents(updated, interaction.locale, labels);
+    const effectiveLang = getEffectiveLanguage(updated.target_language, interaction.locale);
+    const labels = await getDynamicSettingsLabels(effectiveLang);
+    const embed = settingsCommand.buildSettingsEmbed(updated, effectiveLang, labels);
+    const [row1, row2, row3, row4] = settingsCommand.buildSettingsComponents(updated, effectiveLang, labels);
     await interaction.update({ embeds: [embed], components: [row1, row2, row3, row4] });
     return;
   }
@@ -915,19 +946,24 @@ async function handleModalSubmitInteraction(interaction: ModalSubmitInteraction)
 
   if (customId === 'setup_search_modal') {
     const query = interaction.fields.getTextInputValue('setup_search_query');
-    const matches = searchLanguages(query, interaction.locale);
-    const labels = await getDynamicSetupLabels(interaction.locale);
+    let prefs = dbService.getUserPreferences(interaction.user.id);
+    const currentEffective = getEffectiveLanguage(prefs.target_language, interaction.locale);
+    const matches = searchLanguages(query, currentEffective);
 
     if (matches.length === 1) {
-      dbService.setUserLanguage(interaction.user.id, matches[0].code);
+      const chosenLang = matches[0].code;
+      dbService.setUserLanguage(interaction.user.id, chosenLang);
       if (interaction.guild) {
-        await syncUserLiveThreadLanguage(interaction.guild, interaction.user.id, matches[0].code);
+        await syncUserLiveThreadLanguage(interaction.guild, interaction.user.id, chosenLang);
       }
-      const prefs = dbService.getUserPreferences(interaction.user.id);
-      const { embed, components } = setupCommand.buildStep1(prefs, interaction.locale, labels, {
+      prefs = dbService.getUserPreferences(interaction.user.id);
+      const effectiveLang = getEffectiveLanguage(chosenLang, interaction.locale);
+      const labels = await getDynamicSetupLabels(effectiveLang);
+      const { embed, components } = setupCommand.buildStep1(prefs, effectiveLang, labels, {
         page: 0,
         searchQuery: query,
         searchResults: matches,
+        clientLocale: interaction.locale,
       });
       if (interaction.isFromMessage()) {
         await interaction.update({ embeds: [embed], components });
@@ -937,12 +973,13 @@ async function handleModalSubmitInteraction(interaction: ModalSubmitInteraction)
       return;
     }
 
-    const prefs = dbService.getUserPreferences(interaction.user.id);
     if (matches.length > 1) {
-      const { embed, components } = setupCommand.buildStep1(prefs, interaction.locale, labels, {
+      const labels = await getDynamicSetupLabels(currentEffective);
+      const { embed, components } = setupCommand.buildStep1(prefs, currentEffective, labels, {
         page: 0,
         searchQuery: query,
         searchResults: matches,
+        clientLocale: interaction.locale,
       });
       if (interaction.isFromMessage()) {
         await interaction.update({ embeds: [embed], components });
@@ -952,10 +989,12 @@ async function handleModalSubmitInteraction(interaction: ModalSubmitInteraction)
       return;
     }
 
-    const { embed, components } = setupCommand.buildStep1(prefs, interaction.locale, labels, {
+    const labels = await getDynamicSetupLabels(currentEffective);
+    const { embed, components } = setupCommand.buildStep1(prefs, currentEffective, labels, {
       page: 0,
       searchQuery: query,
       searchNotice: labels.noSearchMatch(query),
+      clientLocale: interaction.locale,
     });
     if (interaction.isFromMessage()) {
       await interaction.update({ embeds: [embed], components });
