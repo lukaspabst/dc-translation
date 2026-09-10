@@ -478,27 +478,49 @@ function hydrateUILabels(raw: Record<string, string>): UILabels {
   };
 }
 
+const PRE_BUNDLED_LANGUAGES = ['en', 'de', 'es', 'fr', 'it', 'ru', 'uk'];
+
 export async function getDynamicSetupLabels(locale?: string): Promise<SetupLabels> {
   const norm = (locale || 'en').toLowerCase().split('-')[0];
-  return getSetupLabels(norm);
+  if (PRE_BUNDLED_LANGUAGES.includes(norm)) {
+    return getSetupLabels(norm);
+  }
+  const translated = await getOrTranslateBundle('setup_v2', norm, BASE_SETUP_TEMPLATE);
+  return hydrateSetupLabels(translated);
 }
 
 export async function getDynamicSettingsLabels(locale?: string): Promise<SettingsLabels> {
   const norm = (locale || 'en').toLowerCase().split('-')[0];
-  return getSettingsLabels(norm);
+  if (PRE_BUNDLED_LANGUAGES.includes(norm)) {
+    return getSettingsLabels(norm);
+  }
+  const translated = await getOrTranslateBundle('settings_v2', norm, BASE_SETTINGS_TEMPLATE);
+  return hydrateSettingsLabels(translated);
 }
 
 export async function getDynamicServerLabels(locale?: string): Promise<ServerLabels> {
   const norm = (locale || 'en').toLowerCase().split('-')[0];
-  return getServerLabels(norm);
+  if (PRE_BUNDLED_LANGUAGES.includes(norm)) {
+    return getServerLabels(norm);
+  }
+  const translated = await getOrTranslateBundle('server_v2', norm, BASE_SERVER_TEMPLATE);
+  return hydrateServerLabels(translated);
 }
 
 export async function getDynamicHelpLabels(locale?: string): Promise<HelpLabels> {
   const norm = (locale || 'en').toLowerCase().split('-')[0];
-  return getHelpLabels(norm);
+  if (PRE_BUNDLED_LANGUAGES.includes(norm)) {
+    return getHelpLabels(norm);
+  }
+  const translated = await getOrTranslateBundle('help_v2', norm, BASE_HELP_TEMPLATE);
+  return hydrateHelpLabels(translated);
 }
 
 export async function getDynamicUILabels(locale?: string): Promise<UILabels> {
   const norm = (locale || 'en').toLowerCase().split('-')[0];
-  return getUILabels(norm);
+  if (PRE_BUNDLED_LANGUAGES.includes(norm)) {
+    return getUILabels(norm);
+  }
+  const translated = await getOrTranslateBundle('ui_v2', norm, BASE_UI_TEMPLATE);
+  return hydrateUILabels(translated);
 }
