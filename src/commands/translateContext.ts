@@ -95,7 +95,12 @@ export async function execute(interaction: MessageContextMenuCommandInteraction<
   try {
     const message = interaction.targetMessage;
 
-    if (!message.content || message.content.trim() === '' || isPureMediaOrUrl(message.content)) {
+    if (
+      !message.content ||
+      message.content.trim() === '' ||
+      (message.stickers && message.stickers.size > 0 && isPureMediaOrUrl(message.content)) ||
+      isPureMediaOrUrl(message.content)
+    ) {
       await interaction.editReply({ content: 'This message has no text to translate.' });
       return;
     }

@@ -1674,7 +1674,12 @@ client.on(Events.MessageReactionAdd, async (reaction: MessageReaction | unknown,
     }
   }
 
-  if (!message.content || message.content.trim() === '' || isPureMediaOrUrl(message.content)) return;
+  if (
+    !message.content ||
+    message.content.trim() === '' ||
+    (message.stickers && message.stickers.size > 0 && isPureMediaOrUrl(message.content)) ||
+    isPureMediaOrUrl(message.content)
+  ) return;
 
   const emojiName = msgReaction.emoji.name;
   if (!emojiName) return;
@@ -1859,7 +1864,7 @@ client.on(Events.GuildMemberAdd, async (member) => {
 });
 
 client.on(Events.MessageCreate, async (message: Message) => {
-  if (message.author.bot || !message.guild) return;
+  if (message.author.bot || message.system || !message.guild) return;
 
   if (message.channel.isThread()) {
     const threadChannel = message.channel as ThreadChannel;
@@ -1877,6 +1882,7 @@ client.on(Events.MessageCreate, async (message: Message) => {
     return;
   }
 
+  if (message.stickers && message.stickers.size > 0 && (!message.content || isPureMediaOrUrl(message.content))) return;
   if (!message.content || message.content.trim().length < 2) return;
   if (message.content.startsWith('/') || message.content.startsWith('!')) return;
   if (isPureMediaOrUrl(message.content)) return;
