@@ -52,7 +52,7 @@ const BASE_SETUP_TEMPLATE: Record<string, string> = {
   noSearchMatch: 'No languages found matching "{query}". Try code (e.g. "pl", "sv") or name.',
   step2Title: 'Step 2 of 3: Choose Delivery Mode',
   step2Desc:
-    'Choose how translations are delivered. Select one logical mode (they are mutually exclusive):',
+    'Choose your automatic feed (Live Thread and DM feeds cannot run simultaneously). Flag reactions and right-click translations always work in any mode:',
   threadName: 'Private Live Thread (Default & Recommended)',
   threadDesc:
     'Automatically opens a private thread beside chat. Translations stream in real time without cluttering main chat.',

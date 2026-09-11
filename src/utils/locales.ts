@@ -300,7 +300,7 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
 
     step2Title: 'Step 2 of 3: Choose Delivery Mode',
     step2Desc:
-      'Choose how translations are delivered. Select one logical mode (they are mutually exclusive):',
+      'Choose your automatic feed (Live Thread and DM feeds cannot run simultaneously). Flag reactions and right-click translations always work in any mode:',
     threadName: 'Private Live Thread (Default & Recommended)',
     threadDesc:
       'Automatically opens a private thread beside chat. Translations stream in real time without cluttering main chat.',
@@ -396,7 +396,7 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
 
     step2Title: 'Schritt 2 von 3: Zustellmodus wählen',
     step2Desc:
-      'Wähle, wie du Übersetzungen erhalten möchtest. Wähle genau einen Modus (sie schließen sich gegenseitig logisch aus):',
+      'Wähle deinen automatischen Feed (Live-Thread und DMs können nicht gleichzeitig laufen). Flaggen-Reaktionen und Rechtsklick-Übersetzungen funktionieren immer zusätzlich in jedem Modus:',
     threadName: 'Privater Live-Thread (Standard & Empfohlen)',
     threadDesc:
       'Öffnet automatisch einen privaten Thread neben dem Hauptchat. Übersetzungen streamen live mit, ohne den Chat zu stören.',
@@ -409,7 +409,7 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
       'Fremde Nachrichten landen automatisch privat in deinen Bot-DMs. Ersetzt den Live-Thread.',
     ephemeralName: 'Auf Abruf (Manuell)',
     ephemeralDesc:
-      'Keine automatischen Feeds. Übersetzungen erscheinen nur, wenn du gezielt klickst oder Flaggen setzt.',
+      'Kein automatischer Stream. Übersetzungen erhältst du gezielt per Flaggen-Reaktion oder Rechtsklick.',
     targetLangField: 'Zielsprache',
     backLang: '‹ Zurück: Sprache',
     nextPrefs: 'Weiter: Feineinstellungen ›',
@@ -492,7 +492,7 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
 
     step2Title: 'Paso 2 de 3: Modo de entrega',
     step2Desc:
-      'Elige cómo deseas recibir las traducciones (se excluyen mutuamente):',
+      'Elige tu feed automático (el hilo en vivo y los MD no pueden funcionar a la vez). Las reacciones con banderas y traducciones por clic siempre funcionan en cualquier modo:',
     threadName: 'Hilo privado en vivo (Predeterminado y recomendado)',
     threadDesc:
       'Abre automáticamente un hilo privado junto al chat. Las traducciones se transmiten en tiempo real.',
@@ -505,7 +505,7 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
       'Los mensajes se envían directamente a tus MD privados. Reemplaza el hilo en vivo.',
     ephemeralName: 'A petición (Manual)',
     ephemeralDesc:
-      'Sin transmisiones automáticas. Las traducciones aparecen solo al hacer clic o con banderas.',
+      'Sin transmisiones automáticas. Las traducciones aparecen al hacer clic o con banderas.',
     targetLangField: 'Idioma destino',
     backLang: '‹ Atrás: Idioma',
     nextPrefs: 'Siguiente: Ajustes ›',
@@ -588,7 +588,7 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
 
     step2Title: 'Étape 2 sur 3 : Mode de réception',
     step2Desc:
-      'Choisissez comment recevoir vos traductions (modes mutuellement exclusifs) :',
+      'Choisissez votre flux automatique (le fil en direct et les MP ne peuvent pas fonctionner simultanément). Les réactions avec drapeaux et traductions par clic restent toujours actives dans tous les modes :',
     threadName: 'Fil privé en direct (Par défaut et recommandé)',
     threadDesc:
       'Ouvre automatiquement un fil privé à côté du salon. Les traductions s affichent en temps réel.',
@@ -684,7 +684,7 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
 
     step2Title: 'Passo 2 di 3: Modalità di ricezione',
     step2Desc:
-      'Scegli come ricevere le traduzioni (opzioni mutualmente esclusive):',
+      'Scegli il tuo feed automatico (il thread live e i DM non possono funzionare contemporaneamente). Le reazioni con bandiere e le traduzioni con clic funzionano sempre in ogni modalità:',
     threadName: 'Thread privato Live (Predefinito e raccomandato)',
     threadDesc:
       'Apre automaticamente un thread privato accanto alla chat per traduzioni in tempo reale.',
@@ -780,7 +780,7 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
 
     step2Title: 'Шаг 2 из 3: Режим доставки',
     step2Desc:
-      'Выберите способ получения переводов (режимы взаимоисключающие):',
+      'Выберите автопоток (личная ветка и ЛС не могут работать одновременно). Переводы по реакциям с флажками и клику работают всегда в любом режиме:',
     threadName: 'Личная ветка (По умолчанию и рекомендуется)',
     threadDesc:
       'Автоматически открывает личную ветку рядом с чатом для перевода в реальном времени.',
@@ -876,7 +876,7 @@ const SETUP_DICTIONARIES: Record<string, SetupLabels> = {
 
     step2Title: 'Крок 2 з 3: Режим доставки',
     step2Desc:
-      'Оберіть спосіб отримання перекладів (режими взаємовиключні):',
+      'Оберіть автопотік (особиста гілка та ПП не можуть працювати одночасно). Переклади за реакціями з прапорцями та кліком працюють завжди в будь-якому режимі:',
     threadName: 'Особиста гілка (За замовчуванням і рекомендовано)',
     threadDesc:
       'Автоматично відкриває особисту гілку поруч із чатом для перекладу в реальному часі.',
