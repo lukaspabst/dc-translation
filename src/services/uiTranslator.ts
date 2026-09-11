@@ -485,7 +485,7 @@ export async function getDynamicSetupLabels(locale?: string): Promise<SetupLabel
   if (PRE_BUNDLED_LANGUAGES.includes(norm)) {
     return getSetupLabels(norm);
   }
-  const translated = await getOrTranslateBundle('setup_v2', norm, BASE_SETUP_TEMPLATE);
+  const translated = await getOrTranslateBundle('setup_v3', norm, BASE_SETUP_TEMPLATE);
   return hydrateSetupLabels(translated);
 }
 
@@ -494,7 +494,7 @@ export async function getDynamicSettingsLabels(locale?: string): Promise<Setting
   if (PRE_BUNDLED_LANGUAGES.includes(norm)) {
     return getSettingsLabels(norm);
   }
-  const translated = await getOrTranslateBundle('settings_v2', norm, BASE_SETTINGS_TEMPLATE);
+  const translated = await getOrTranslateBundle('settings_v3', norm, BASE_SETTINGS_TEMPLATE);
   return hydrateSettingsLabels(translated);
 }
 
@@ -503,7 +503,7 @@ export async function getDynamicServerLabels(locale?: string): Promise<ServerLab
   if (PRE_BUNDLED_LANGUAGES.includes(norm)) {
     return getServerLabels(norm);
   }
-  const translated = await getOrTranslateBundle('server_v2', norm, BASE_SERVER_TEMPLATE);
+  const translated = await getOrTranslateBundle('server_v3', norm, BASE_SERVER_TEMPLATE);
   return hydrateServerLabels(translated);
 }
 
@@ -512,7 +512,7 @@ export async function getDynamicHelpLabels(locale?: string): Promise<HelpLabels>
   if (PRE_BUNDLED_LANGUAGES.includes(norm)) {
     return getHelpLabels(norm);
   }
-  const translated = await getOrTranslateBundle('help_v2', norm, BASE_HELP_TEMPLATE);
+  const translated = await getOrTranslateBundle('help_v3', norm, BASE_HELP_TEMPLATE);
   return hydrateHelpLabels(translated);
 }
 
@@ -521,6 +521,6 @@ export async function getDynamicUILabels(locale?: string): Promise<UILabels> {
   if (PRE_BUNDLED_LANGUAGES.includes(norm)) {
     return getUILabels(norm);
   }
-  const translated = await getOrTranslateBundle('ui_v2', norm, BASE_UI_TEMPLATE);
+  const translated = await getOrTranslateBundle('ui_v3', norm, BASE_UI_TEMPLATE);
   return hydrateUILabels(translated);
 }

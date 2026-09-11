@@ -276,6 +276,14 @@ try {
   sqliteDb.exec('ALTER TABLE live_threads ADD COLUMN guild_id TEXT');
 } catch {}
 
+try {
+  sqliteDb.exec('ALTER TABLE user_muted_channels ADD COLUMN guild_id TEXT');
+} catch {}
+
+try {
+  sqliteDb.exec('ALTER TABLE user_muted_channels ADD COLUMN created_at TEXT');
+} catch {}
+
 sqliteDb.exec(`
   CREATE TABLE IF NOT EXISTS channel_buffered_messages (
     id TEXT PRIMARY KEY,
@@ -1287,6 +1295,21 @@ export const dbService = {
         .catch((err) => {
           console.error('Error syncing thread focus to MongoDB:', err);
         });
+    }
+  },
+
+  deleteThreadFocus(threadId: string): void {
+    threadFocusCache.delete(threadId);
+    try {
+      sqliteDb.prepare('DELETE FROM thread_focus WHERE thread_id = ?').run(threadId);
+    } catch (err) {
+      console.error('Error deleting thread focus in SQLite:', err);
+    }
+
+    if (mongoThreadFocusCol) {
+      mongoThreadFocusCol.deleteOne({ thread_id: threadId }).catch((err) => {
+        console.error('Error deleting thread focus from MongoDB:', err);
+      });
     }
   },
 
