@@ -139,7 +139,7 @@ async function flushBatch(key: string, client: Client): Promise<void> {
         )
         .setStyle(isMuted ? ButtonStyle.Success : ButtonStyle.Secondary),
       new ButtonBuilder()
-        .setLabel('Jump to Message ↗')
+        .setLabel('Jump to Message')
         .setStyle(ButtonStyle.Link)
         .setURL(latestUrl)
     );

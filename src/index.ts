@@ -327,7 +327,7 @@ async function deliverChannelCatchupToThread(
           )
           .setStyle(isMuted ? ButtonStyle.Success : ButtonStyle.Secondary),
         new ButtonBuilder()
-          .setLabel('Jump to Message ↗')
+          .setLabel('Jump to Message')
           .setStyle(ButtonStyle.Link)
           .setURL(latestUrl)
       );
@@ -588,7 +588,7 @@ async function handleSelectMenuInteraction(interaction: StringSelectMenuInteract
             .setStyle(ButtonStyle.Success)
         );
         await thread.send({
-          content: `⚠️ **${channelName}** is currently muted. You will not receive live translations until you unmute it.`,
+          content: `**${channelName}** is currently muted. You will not receive live translations until you unmute it.`,
           components: [unmuteRow],
         }).catch(() => {});
       }
@@ -1334,7 +1334,7 @@ async function resolveTargetTextChannelForUser(
           .setLabel(`Mute #${channelName}`)
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
-          .setLabel('Jump to Message ↗')
+          .setLabel('Jump to Message')
           .setStyle(ButtonStyle.Link)
           .setURL(latestUrl)
       );
@@ -1405,7 +1405,7 @@ async function resolveTargetTextChannelForUser(
             .setStyle(ButtonStyle.Success)
         );
         await thread.send({
-          content: `⚠️ **${channelName}** is currently muted. You will not receive live translations until you unmute it.`,
+          content: `**${channelName}** is currently muted. You will not receive live translations until you unmute it.`,
           components: [unmuteRow],
         }).catch(() => {});
       }
@@ -1531,7 +1531,7 @@ async function resolveTargetTextChannelForUser(
           );
           const jumpRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
             new ButtonBuilder()
-              .setLabel('Jump to Message ↗')
+              .setLabel('Jump to Message')
               .setStyle(ButtonStyle.Link)
               .setURL(targetMsg.url)
           );
@@ -1541,7 +1541,7 @@ async function resolveTargetTextChannelForUser(
 
       const threadRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
-          .setLabel('Open Live Thread ↗')
+          .setLabel('Open Live Thread')
           .setStyle(ButtonStyle.Link)
           .setURL(`https://discord.com/channels/${interaction.guildId}/${thread.id}`)
       );
@@ -2049,7 +2049,7 @@ client.on(Events.MessageCreate, async (message: Message) => {
 
       const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
-          .setLabel('Jump to Message ↗')
+          .setLabel('Jump to Message')
           .setStyle(ButtonStyle.Link)
           .setURL(message.url)
       );
