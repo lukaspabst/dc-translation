@@ -28,6 +28,8 @@ import {
   ThreadChannel,
   GuildMember,
   Guild,
+  ComponentType,
+  ButtonComponent,
 } from 'discord.js';
 import * as dotenv from 'dotenv';
 import * as http from 'http';
@@ -279,8 +281,12 @@ async function deliverChannelCatchupToThread(
 
     const chunkSize = 8;
     const latestUrl = unreadItems[unreadItems.length - 1].url;
+    const oldestDeliveredTimestamp = unreadItems[0].created_at;
+    const remainingOlder = dbService.getOlderMessagesCount(cId, oldestDeliveredTimestamp);
+
     for (let i = 0; i < validItems.length; i += chunkSize) {
       const chunk = validItems.slice(i, i + chunkSize);
+      const isLastChunk = i + chunkSize >= validItems.length;
       const embed = createBatchedChannelEmbed({
         channelName,
         targetLanguage: prefs.target_language,
@@ -288,7 +294,16 @@ async function deliverChannelCatchupToThread(
         showOriginal: prefs.show_original === 1,
       });
 
-      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      const row = new ActionRowBuilder<ButtonBuilder>();
+      if (isLastChunk && remainingOlder > 0) {
+        row.addComponents(
+          new ButtonBuilder()
+            .setCustomId(`livethread_load_more:${cId}:${oldestDeliveredTimestamp}`)
+            .setLabel(`Load More (${remainingOlder})`)
+            .setStyle(ButtonStyle.Primary)
+        );
+      }
+      row.addComponents(
         new ButtonBuilder()
           .setCustomId(`livethread_mute:${cId}`)
           .setLabel(`Mute #${channelName}`)
@@ -1079,6 +1094,140 @@ async function resolveTargetTextChannelForUser(
       content: `Unmuted #${channelName}. Live translations for this channel have been restored.`,
       components: [],
     });
+    return;
+  }
+
+  if (customId.startsWith('livethread_load_more:')) {
+    const parts = customId.split(':');
+    const channelId = parts[1];
+    const beforeTimestamp = Number(parts[2]);
+    if (!channelId || isNaN(beforeTimestamp)) return;
+
+    if (interaction.guild) {
+      const targetChannel = interaction.guild.channels.cache.get(channelId);
+      if (targetChannel) {
+        const member =
+          interaction.member instanceof GuildMember
+            ? interaction.member
+            : await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+        if (member) {
+          const perms = targetChannel.permissionsFor(member);
+          if (!perms || !perms.has('ViewChannel') || !perms.has('ReadMessageHistory')) {
+            await interaction.reply({
+              content: 'You do not have permission to view this channel.',
+              flags: MessageFlags.Ephemeral,
+            }).catch(() => {});
+            return;
+          }
+        }
+      }
+    }
+
+    await interaction.deferUpdate().catch(() => {});
+
+    if (interaction.message && interaction.message.components.length > 0) {
+      const updatedRows = interaction.message.components
+        .map((row) => {
+          if (!('components' in row)) return null;
+          const newRow = new ActionRowBuilder<ButtonBuilder>();
+          for (const comp of row.components) {
+            if (comp.type === ComponentType.Button && comp.customId?.startsWith('livethread_load_more:')) {
+              continue;
+            }
+            if (comp.type === ComponentType.Button) {
+              newRow.addComponents(ButtonBuilder.from(comp as ButtonComponent));
+            }
+          }
+          return newRow;
+        })
+        .filter((r): r is ActionRowBuilder<ButtonBuilder> => r !== null && r.components.length > 0);
+
+      await interaction.message.edit({ components: updatedRows }).catch(() => {});
+    }
+
+    const thread = interaction.channel as ThreadChannel | null;
+    if (!thread || !thread.isThread()) return;
+
+    const olderItems = dbService.getOlderMessagesForChannel(channelId, beforeTimestamp, 50);
+    if (olderItems.length === 0) return;
+
+    const prefs = dbService.getUserPreferences(interaction.user.id);
+    const validItems: BatchedMessageItem[] = [];
+
+    for (const item of olderItems) {
+      try {
+        let translated: string;
+        if (prefs.preferred_engine === 'deepl') {
+          translated = await translationService.translateWithDeepL(
+            item.original_text,
+            prefs.target_language
+          );
+        } else {
+          translated = await translationService.translateWithGoogle(
+            item.original_text,
+            prefs.target_language
+          );
+        }
+
+        if (translated.trim().toLowerCase() === item.original_text.trim().toLowerCase()) {
+          continue;
+        }
+
+        validItems.push({
+          authorName: item.author_name,
+          authorAvatar: item.author_avatar,
+          translatedText: translated,
+          originalText: item.original_text,
+        });
+      } catch (err) {
+        console.error('Load more translation error:', err);
+      }
+    }
+
+    if (validItems.length === 0) return;
+
+    const channelName = olderItems[0].channel_name;
+    const newOldestTimestamp = olderItems[0].created_at;
+    const remainingOlder = dbService.getOlderMessagesCount(channelId, newOldestTimestamp);
+
+    await thread
+      .send(`› Loaded **${validItems.length}** earlier message${validItems.length > 1 ? 's' : ''} from **#${channelName}**`)
+      .catch(() => {});
+
+    const chunkSize = 8;
+    const latestUrl = olderItems[olderItems.length - 1].url;
+    for (let i = 0; i < validItems.length; i += chunkSize) {
+      const chunk = validItems.slice(i, i + chunkSize);
+      const isLastChunk = i + chunkSize >= validItems.length;
+      const embed = createBatchedChannelEmbed({
+        channelName,
+        targetLanguage: prefs.target_language,
+        items: chunk,
+        showOriginal: prefs.show_original === 1,
+      });
+
+      const row = new ActionRowBuilder<ButtonBuilder>();
+      if (isLastChunk && remainingOlder > 0) {
+        row.addComponents(
+          new ButtonBuilder()
+            .setCustomId(`livethread_load_more:${channelId}:${newOldestTimestamp}`)
+            .setLabel(`Load More (${remainingOlder})`)
+            .setStyle(ButtonStyle.Primary)
+        );
+      }
+      row.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`livethread_mute:${channelId}`)
+          .setLabel(`Mute #${channelName}`)
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setLabel('Jump to Message ↗')
+          .setStyle(ButtonStyle.Link)
+          .setURL(latestUrl)
+      );
+
+      await thread.send({ embeds: [embed], components: [row] }).catch(() => {});
+    }
     return;
   }
 

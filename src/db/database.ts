@@ -1476,6 +1476,52 @@ export const dbService = {
     }
   },
 
+  getOlderMessagesCount(channelId: string, beforeTimestamp: number): number {
+    try {
+      const row = sqliteDb
+        .prepare(`
+          SELECT COUNT(*) as cnt
+          FROM channel_buffered_messages
+          WHERE channel_id = ? AND created_at < ?
+        `)
+        .get(channelId, beforeTimestamp) as { cnt: number } | undefined;
+      return row ? row.cnt : 0;
+    } catch {
+      return 0;
+    }
+  },
+
+  getOlderMessagesForChannel(channelId: string, beforeTimestamp: number, limit: number = 50): ChannelMessageItem[] {
+    try {
+      const rows = sqliteDb
+        .prepare(`
+          SELECT * FROM (
+            SELECT * FROM channel_buffered_messages
+            WHERE channel_id = ? AND created_at < ?
+            ORDER BY created_at DESC
+            LIMIT ?
+          )
+          ORDER BY created_at ASC
+        `)
+        .all(channelId, beforeTimestamp, limit) as Array<Record<string, unknown>>;
+
+      return rows.map((r) => ({
+        id: String(r.id),
+        guild_id: String(r.guild_id),
+        channel_id: String(r.channel_id),
+        channel_name: String(r.channel_name),
+        author_name: String(r.author_name),
+        author_avatar: r.author_avatar ? String(r.author_avatar) : undefined,
+        original_text: decryptForChannel(String(r.encrypted_text), channelId),
+        url: String(r.url),
+        created_at: Number(r.created_at),
+      }));
+    } catch (e) {
+      console.error('Error reading older channel messages:', e);
+      return [];
+    }
+  },
+
   getUserUnreadCounts(discordId: string, visibleChannelIds: string[]): Map<string, { channelName: string; count: number }> {
     const result = new Map<string, { channelName: string; count: number }>();
     if (visibleChannelIds.length === 0) return result;
