@@ -147,8 +147,8 @@ async function flushBatch(key: string, client: Client): Promise<void> {
       await channel.setArchived(false).catch(() => {});
     }
 
-    if (!channel.locked) {
-      await channel.setLocked(true).catch(() => {});
+    if (channel.locked) {
+      await channel.setLocked(false).catch(() => {});
     }
 
     await channel.send({ embeds: [embed], components: [row] }).catch((err) => {

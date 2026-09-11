@@ -211,8 +211,8 @@ export async function ensureLiveThread(params: {
       if (existingThread.archived) {
         await existingThread.setArchived(false).catch(() => {});
       }
-      if (!existingThread.locked) {
-        await existingThread.setLocked(true).catch(() => {});
+      if (existingThread.locked) {
+        await existingThread.setLocked(false).catch(() => {});
       }
       await existingThread.members.add(user.id).catch(() => {});
 
@@ -285,8 +285,8 @@ export async function ensureLiveThread(params: {
     if (discordExistingThread.archived) {
       await discordExistingThread.setArchived(false).catch(() => {});
     }
-    if (!discordExistingThread.locked) {
-      await discordExistingThread.setLocked(true).catch(() => {});
+    if (discordExistingThread.locked) {
+      await discordExistingThread.setLocked(false).catch(() => {});
     }
     await discordExistingThread.members.add(user.id).catch(() => {});
 
@@ -315,7 +315,6 @@ export async function ensureLiveThread(params: {
     });
 
     await thread.members.add(user.id).catch(() => {});
-    await thread.setLocked(true).catch(() => {});
 
     dbService.registerLiveThread(
       user.id,

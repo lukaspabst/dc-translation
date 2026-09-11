@@ -119,6 +119,16 @@ client.once(Events.ClientReady, async (readyClient) => {
   initDeepL(process.env.DEEPL_AUTH_KEY);
   initGoogleApi(process.env.GOOGLE_TRANSLATE_API_KEY);
   await initDatabase();
+
+  try {
+    const liveThreads = dbService.getAllLiveThreads();
+    for (const lt of liveThreads) {
+      const thread = (await client.channels.fetch(lt.thread_id).catch(() => null)) as ThreadChannel | null;
+      if (thread && thread.isThread() && thread.locked) {
+        await thread.setLocked(false).catch(() => {});
+      }
+    }
+  } catch {}
 });
 
 client.on(Events.InteractionCreate, async (interaction: Interaction) => {
@@ -1875,8 +1885,8 @@ client.on(Events.MessageCreate, async (message: Message) => {
 
     if (isTranslationThread) {
       await message.delete().catch(() => {});
-      if (!threadChannel.locked) {
-        await threadChannel.setLocked(true).catch(() => {});
+      if (threadChannel.locked) {
+        await threadChannel.setLocked(false).catch(() => {});
       }
     }
     return;
