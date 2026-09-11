@@ -138,6 +138,7 @@ let mongoUserMutedChannelsCol: Collection<UserMutedChannelRecord> | null = null;
 let mongoBufferedMessagesCol: Collection<BufferedMessageRecord> | null = null;
 let mongoChannelBufferedMessagesCol: Collection<ChannelMessageRecord> | null = null;
 let mongoUserChannelReadsCol: Collection<UserChannelReadRecord> | null = null;
+let mongoThreadFocusCol: Collection<{ thread_id: string; channel_id: string }> | null = null;
 
 export interface UIBundleDoc {
   bundle_key: string;
@@ -378,6 +379,9 @@ export async function initDatabase(): Promise<void> {
       mongoUserChannelReadsCol = mongoDb.collection<UserChannelReadRecord>('user_channel_reads');
       await mongoUserChannelReadsCol.createIndex({ discord_id: 1, channel_id: 1 }, { unique: true });
 
+      mongoThreadFocusCol = mongoDb.collection<{ thread_id: string; channel_id: string }>('thread_focus');
+      await mongoThreadFocusCol.createIndex({ thread_id: 1 }, { unique: true });
+
       try {
         const storedBundles = await mongoUiBundlesCol.find({}).toArray();
         for (const b of storedBundles) {
@@ -545,6 +549,22 @@ export async function initDatabase(): Promise<void> {
                   ON CONFLICT(discord_id, channel_id) DO UPDATE SET last_read_at = excluded.last_read_at
                 `)
                 .run(ur.discord_id, ur.channel_id, ur.last_read_at);
+            } catch {}
+          }
+        }
+
+        if (mongoThreadFocusCol) {
+          const storedFocus = await mongoThreadFocusCol.find({}).toArray();
+          for (const f of storedFocus) {
+            try {
+              threadFocusCache.set(f.thread_id, f.channel_id);
+              sqliteDb
+                .prepare(`
+                  INSERT INTO thread_focus (thread_id, channel_id)
+                  VALUES (?, ?)
+                  ON CONFLICT(thread_id) DO UPDATE SET channel_id = excluded.channel_id
+                `)
+                .run(f.thread_id, f.channel_id);
             } catch {}
           }
         }
@@ -1204,6 +1224,18 @@ export const dbService = {
         .run(threadId, channelId);
     } catch (err) {
       console.error('Error setting thread focus in SQLite:', err);
+    }
+
+    if (mongoThreadFocusCol) {
+      mongoThreadFocusCol
+        .updateOne(
+          { thread_id: threadId },
+          { $set: { thread_id: threadId, channel_id: channelId } },
+          { upsert: true }
+        )
+        .catch((err) => {
+          console.error('Error syncing thread focus to MongoDB:', err);
+        });
     }
   },
 

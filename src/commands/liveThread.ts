@@ -415,6 +415,63 @@ export function buildLiveThreadControlComponents(
   return [selectRow, buttonRow];
 }
 
+export async function updateLiveThreadControlMessage(
+  thread: ThreadChannel,
+  newFocus = 'all'
+): Promise<void> {
+  try {
+    const messages = await thread.messages.fetch({ limit: 20 }).catch(() => null);
+    if (!messages) return;
+
+    const controlMsg = messages.find((m) =>
+      m.components.some(
+        (row) =>
+          'components' in row &&
+          row.components.some(
+            (c) => 'customId' in c && c.customId?.startsWith('livethread_focus:')
+          )
+      )
+    );
+    if (!controlMsg) return;
+
+    const liveRecord = dbService.getLiveThread(thread.id);
+    const userId = liveRecord?.discord_id || thread.ownerId || '';
+    const member = userId
+      ? (thread.guild.members.cache.get(userId) ||
+         (await thread.guild.members.fetch(userId).catch(() => null)))
+      : null;
+
+    const [selectRow, stopRow] = buildLiveThreadControlComponents(
+      thread.guild,
+      member,
+      thread.id,
+      newFocus
+    );
+
+    if (controlMsg.embeds.length > 0) {
+      const currentEmbed = controlMsg.embeds[0];
+      const newEmbed = EmbedBuilder.from(currentEmbed);
+      const focusLabel =
+        newFocus === 'all'
+          ? 'All Channels (Default)'
+          : `#${thread.guild.channels.cache.get(newFocus)?.name || newFocus}`;
+
+      const fields = currentEmbed.fields.map((f) => {
+        if (f.name === 'Feed Focus') {
+          return { ...f, value: `\`${focusLabel}\`` };
+        }
+        return f;
+      });
+      newEmbed.setFields(fields);
+      await controlMsg.edit({ embeds: [newEmbed], components: [selectRow, stopRow] }).catch(() => {});
+    } else {
+      await controlMsg.edit({ components: [selectRow, stopRow] }).catch(() => {});
+    }
+  } catch (err) {
+    console.error('Error updating live thread control message:', err);
+  }
+}
+
 export async function syncUserLiveThreadLanguage(
   guild: Guild,
   userId: string,

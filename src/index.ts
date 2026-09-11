@@ -47,6 +47,7 @@ import {
   ensureLiveThread,
   syncUserLiveThreadLanguage,
   buildLiveThreadControlComponents,
+  updateLiveThreadControlMessage,
 } from './commands/liveThread';
 import { enqueueThreadMessage, flushAllBatches } from './services/messageBatcher';
 import * as translateContextCommand from './commands/translateContext';
@@ -279,10 +280,10 @@ async function deliverChannelCatchupToThread(
     const channelName = unreadItems[0].channel_name;
     const latestUrl = unreadItems[unreadItems.length - 1].url;
     const oldestDeliveredTimestamp = unreadItems[0].created_at;
-    const remainingOlder = dbService.getOlderMessagesCount(cId, oldestDeliveredTimestamp);
+    const remainingUnreads = Math.max(0, totalUnreads - validItems.length);
 
     const countNote =
-      remainingOlder > 0
+      remainingUnreads > 0
         ? `${validItems.length} of ${totalUnreads} unread messages`
         : `${validItems.length} caught-up message${validItems.length > 1 ? 's' : ''}`;
 
@@ -303,11 +304,11 @@ async function deliverChannelCatchupToThread(
       });
 
       const row = new ActionRowBuilder<ButtonBuilder>();
-      if (isLastChunk && remainingOlder > 0) {
+      if (isLastChunk && remainingUnreads > 0) {
         row.addComponents(
           new ButtonBuilder()
             .setCustomId(`livethread_load_more:${cId}:${oldestDeliveredTimestamp}`)
-            .setLabel(`Load More (${remainingOlder})`)
+            .setLabel(`Load More (${remainingUnreads})`)
             .setStyle(ButtonStyle.Primary)
         );
       }
@@ -538,7 +539,21 @@ async function handleSelectMenuInteraction(interaction: StringSelectMenuInteract
         threadId,
         targetChannelId
       );
-      await interaction.update({ components: [selectRow, stopRow] }).catch(() => {});
+      const currentEmbed = interaction.message.embeds[0];
+      if (currentEmbed) {
+        const focusLabel = isAll ? 'All Channels (Default)' : channelName;
+        const newEmbed = EmbedBuilder.from(currentEmbed);
+        const fields = currentEmbed.fields.map((f) => {
+          if (f.name === 'Feed Focus') {
+            return { ...f, value: `\`${focusLabel}\`` };
+          }
+          return f;
+        });
+        newEmbed.setFields(fields);
+        await interaction.update({ embeds: [newEmbed], components: [selectRow, stopRow] }).catch(() => {});
+      } else {
+        await interaction.update({ components: [selectRow, stopRow] }).catch(() => {});
+      }
     }
 
     const deliveredCount = isAll
@@ -1300,6 +1315,7 @@ async function resolveTargetTextChannelForUser(
       await clearThreadActivityHints(thread, interaction.message?.id);
 
       dbService.setThreadFocus(thread.id, channelId);
+      await updateLiveThreadControlMessage(thread, channelId);
 
       const targetChannel = interaction.guild?.channels.cache.get(channelId);
       const channelName = targetChannel ? `#${targetChannel.name}` : 'this channel';
@@ -1337,6 +1353,7 @@ async function resolveTargetTextChannelForUser(
       await clearThreadActivityHints(thread, interaction.message?.id);
 
       dbService.setThreadFocus(threadId, 'all');
+      await updateLiveThreadControlMessage(thread, 'all');
       const deliveredCount = await deliverBufferedMessagesToThread(
         interaction.client,
         threadId,
