@@ -251,10 +251,6 @@ async function deliverChannelCatchupToThread(
           );
         }
 
-        if (translated.trim().toLowerCase() === item.original_text.trim().toLowerCase()) {
-          continue;
-        }
-
         validItems.push({
           authorName: item.author_name,
           authorAvatar: item.author_avatar,
@@ -271,18 +267,20 @@ async function deliverChannelCatchupToThread(
     if (validItems.length === 0) continue;
 
     const channelName = unreadItems[0].channel_name;
-    const countNote = totalUnreads > validItems.length
-      ? `${validItems.length} latest of ${totalUnreads} unread messages`
-      : `${validItems.length} caught-up message${validItems.length > 1 ? 's' : ''}`;
+    const latestUrl = unreadItems[unreadItems.length - 1].url;
+    const oldestDeliveredTimestamp = unreadItems[0].created_at;
+    const remainingOlder = dbService.getOlderMessagesCount(cId, oldestDeliveredTimestamp);
+
+    const countNote =
+      remainingOlder > 0
+        ? `${validItems.length} of ${totalUnreads} unread messages`
+        : `${validItems.length} caught-up message${validItems.length > 1 ? 's' : ''}`;
 
     await thread
       .send(`› Focus switched to **#${channelName}** (${countNote})`)
       .catch(() => {});
 
     const chunkSize = 8;
-    const latestUrl = unreadItems[unreadItems.length - 1].url;
-    const oldestDeliveredTimestamp = unreadItems[0].created_at;
-    const remainingOlder = dbService.getOlderMessagesCount(cId, oldestDeliveredTimestamp);
 
     for (let i = 0; i < validItems.length; i += chunkSize) {
       const chunk = validItems.slice(i, i + chunkSize);
@@ -325,6 +323,46 @@ async function deliverChannelCatchupToThread(
 
 const deliverBufferedMessagesToThread = deliverChannelCatchupToThread;
 
+async function clearThreadActivityHints(
+  thread: ThreadChannel,
+  additionalMessageId?: string
+): Promise<void> {
+  const existingMsgId = lastUnreadMessagePerThread.get(thread.id);
+  if (existingMsgId) {
+    const existingMsg = await thread.messages.fetch(existingMsgId).catch(() => null);
+    if (existingMsg) await existingMsg.delete().catch(() => {});
+    lastUnreadMessagePerThread.delete(thread.id);
+  }
+
+  if (additionalMessageId && additionalMessageId !== existingMsgId) {
+    const addMsg = await thread.messages.fetch(additionalMessageId).catch(() => null);
+    if (addMsg) await addMsg.delete().catch(() => {});
+  }
+
+  try {
+    const recentMessages = await thread.messages.fetch({ limit: 20 }).catch(() => null);
+    if (recentMessages) {
+      for (const [, msg] of recentMessages) {
+        const isActivityHint =
+          msg.embeds.some((e) => e.description?.startsWith('• Activity in other channels')) ||
+          msg.components.some(
+            (row) =>
+              'components' in row &&
+              row.components.some(
+                (c) =>
+                  'customId' in c &&
+                  (c.customId?.startsWith('livethread_focus_') ||
+                    c.customId?.startsWith('livethread_catchup_'))
+              )
+          );
+        if (isActivityHint) {
+          await msg.delete().catch(() => {});
+        }
+      }
+    }
+  } catch {}
+}
+
 async function notifyThreadUnreadActivity(
   client: Client,
   threadId: string,
@@ -354,14 +392,10 @@ async function notifyThreadUnreadActivity(
     .map((c) => c.id);
 
   const counts = dbService.getUserUnreadCounts(discordId, visibleChannelIds);
-  const existingMsgId = lastUnreadMessagePerThread.get(threadId);
+
+  await clearThreadActivityHints(thread);
 
   if (counts.size === 0) {
-    if (existingMsgId) {
-      const existingMsg = await thread.messages.fetch(existingMsgId).catch(() => null);
-      if (existingMsg) await existingMsg.delete().catch(() => {});
-      lastUnreadMessagePerThread.delete(threadId);
-    }
     return;
   }
 
@@ -392,14 +426,6 @@ async function notifyThreadUnreadActivity(
   const embed = new EmbedBuilder()
     .setColor(0x8b5cf6)
     .setDescription(`• Activity in other channels (${totalUnread} new message${totalUnread > 1 ? 's' : ''} waiting)`);
-
-  if (existingMsgId) {
-    const existingMsg = await thread.messages.fetch(existingMsgId).catch(() => null);
-    if (existingMsg) {
-      await existingMsg.edit({ embeds: [embed], components: [row] }).catch(() => {});
-      return;
-    }
-  }
 
   const newMsg = await thread.send({ embeds: [embed], components: [row] }).catch(() => null);
   if (newMsg) {
@@ -1169,10 +1195,6 @@ async function resolveTargetTextChannelForUser(
           );
         }
 
-        if (translated.trim().toLowerCase() === item.original_text.trim().toLowerCase()) {
-          continue;
-        }
-
         validItems.push({
           authorName: item.author_name,
           authorAvatar: item.author_avatar,
@@ -1262,6 +1284,11 @@ async function resolveTargetTextChannelForUser(
 
     const thread = interaction.channel as ThreadChannel | null;
     if (thread && thread.isThread()) {
+      if (interaction.message) {
+        await interaction.message.delete().catch(() => {});
+      }
+      await clearThreadActivityHints(thread, interaction.message?.id);
+
       dbService.setThreadFocus(thread.id, channelId);
 
       const targetChannel = interaction.guild?.channels.cache.get(channelId);
@@ -1292,21 +1319,26 @@ async function resolveTargetTextChannelForUser(
 
     await interaction.deferUpdate().catch(() => {});
 
-    dbService.setThreadFocus(threadId, 'all');
-    const deliveredCount = await deliverBufferedMessagesToThread(
-      interaction.client,
-      threadId,
-      interaction.user.id
-    );
+    const thread = (await interaction.client.channels.fetch(threadId).catch(() => null)) as ThreadChannel | null;
+    if (thread && thread.isThread()) {
+      if (interaction.message) {
+        await interaction.message.delete().catch(() => {});
+      }
+      await clearThreadActivityHints(thread, interaction.message?.id);
 
-    if (deliveredCount === 0) {
-      const thread = (await interaction.client.channels.fetch(threadId).catch(() => null)) as ThreadChannel | null;
-      if (thread && thread.isThread()) {
+      dbService.setThreadFocus(threadId, 'all');
+      const deliveredCount = await deliverBufferedMessagesToThread(
+        interaction.client,
+        threadId,
+        interaction.user.id
+      );
+
+      if (deliveredCount === 0) {
         await thread.send('› Focus switched to **All Channels**').catch(() => {});
       }
-    }
 
-    await notifyThreadUnreadActivity(interaction.client, threadId, interaction.user.id, interaction.guild);
+      await notifyThreadUnreadActivity(interaction.client, threadId, interaction.user.id, interaction.guild);
+    }
     return;
   }
 

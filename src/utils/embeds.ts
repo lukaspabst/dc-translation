@@ -143,7 +143,12 @@ export function createBatchedChannelEmbed(options: {
         ? `${item.translatedText.substring(0, 500)}...`
         : item.translatedText;
     let block = `**${item.authorName}**: ${text}`;
-    if (showOriginal && item.originalText && item.originalText.trim() !== '') {
+    if (
+      showOriginal &&
+      item.originalText &&
+      item.originalText.trim() !== '' &&
+      item.translatedText.trim().toLowerCase() !== item.originalText.trim().toLowerCase()
+    ) {
       const orig =
         item.originalText.length > 200
           ? `${item.originalText.substring(0, 200)}...`
