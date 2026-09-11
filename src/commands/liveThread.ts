@@ -63,6 +63,23 @@ export const data = new SlashCommandBuilder()
         fr: 'Ferme et arrête votre fil privé de traduction',
         it: 'Chiude e arresta il tuo thread privato di traduzione',
       })
+  )
+  .addSubcommand((sub) =>
+    sub
+      .setName('unmute')
+      .setDescription('Unmute channels that you previously muted')
+      .setDescriptionLocalizations({
+        de: 'Stummschaltung für Kanäle aufheben',
+        'es-ES': 'Desactivar silencio de canales',
+        fr: 'Rétablir le son des canaux',
+        it: 'Riattiva canali precedentemente silenziati',
+      })
+      .addChannelOption((opt) =>
+        opt
+          .setName('channel')
+          .setDescription('Specific channel to unmute')
+          .setRequired(false)
+      )
   );
 
 export async function autocomplete(interaction: AutocompleteInteraction) {
@@ -173,6 +190,50 @@ export async function execute(interaction: ChatInputCommandInteraction<CacheType
       content: 'Your live translation thread has been stopped and archived.',
       flags: MessageFlags.Ephemeral,
     });
+    return;
+  }
+
+  if (subcommand === 'unmute') {
+    const targetChannel = interaction.options.getChannel('channel');
+    if (targetChannel) {
+      await dbService.unmuteChannel(interaction.user.id, targetChannel.id);
+      await interaction.reply({
+        content: `Unmuted #${targetChannel.name}. Live translations for this channel have been restored.`,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    const mutedChannelIds = dbService.getMutedChannels(
+      interaction.user.id,
+      interaction.guildId || undefined
+    );
+    if (mutedChannelIds.length === 0) {
+      await interaction.reply({
+        content: 'You have no muted channels in this server.',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    const row = new ActionRowBuilder<ButtonBuilder>();
+    for (const cId of mutedChannelIds.slice(0, 5)) {
+      const ch = interaction.guild?.channels.cache.get(cId);
+      const name = ch && 'name' in ch ? ch.name : cId;
+      row.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`livethread_unmute:${cId}`)
+          .setLabel(`Unmute #${name}`)
+          .setStyle(ButtonStyle.Success)
+      );
+    }
+
+    await interaction.reply({
+      content: '**Muted channels:**',
+      components: [row],
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
   }
 }
 
@@ -389,11 +450,16 @@ export function buildLiveThreadControlComponents(
   ];
 
   for (const c of textChannels) {
+    const isMuted = member ? dbService.isChannelMuted(member.id, c.id) : false;
     options.push(
       new StringSelectMenuOptionBuilder()
-        .setLabel(`# ${c.name}`)
+        .setLabel(isMuted ? `# ${c.name} (Muted)` : `# ${c.name}`)
         .setValue(`focus:${c.id}`)
-        .setDescription(`Focus translations only on #${c.name}`)
+        .setDescription(
+          isMuted
+            ? `[Muted] Focus on #${c.name}`
+            : `Focus translations only on #${c.name}`
+        )
         .setDefault(currentFocus === c.id)
     );
   }
@@ -405,7 +471,38 @@ export function buildLiveThreadControlComponents(
       .addOptions(options)
   );
 
-  const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  const buttonRow = new ActionRowBuilder<ButtonBuilder>();
+
+  const isCurrentMuted =
+    member && currentFocus !== 'all'
+      ? dbService.isChannelMuted(member.id, currentFocus)
+      : false;
+
+  if (isCurrentMuted) {
+    const focusedChannel = guild.channels.cache.get(currentFocus);
+    const focusedName = focusedChannel ? focusedChannel.name : 'channel';
+    buttonRow.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`livethread_unmute:${currentFocus}`)
+        .setLabel(`Unmute #${focusedName}`)
+        .setStyle(ButtonStyle.Success)
+    );
+  }
+
+  const mutedChannels = member
+    ? dbService.getMutedChannels(member.id, guild.id)
+    : [];
+
+  if (mutedChannels.length > 0 && !isCurrentMuted) {
+    buttonRow.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`livethread_list_muted:${threadId}`)
+        .setLabel(`Muted Channels (${mutedChannels.length})`)
+        .setStyle(ButtonStyle.Secondary)
+    );
+  }
+
+  buttonRow.addComponents(
     new ButtonBuilder()
       .setCustomId(`livethread_stop:${threadId}`)
       .setLabel('Stop Feed')

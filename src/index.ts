@@ -312,11 +312,20 @@ async function deliverChannelCatchupToThread(
             .setStyle(ButtonStyle.Primary)
         );
       }
+      const isMuted = dbService.isChannelMuted(discordId, cId);
       row.addComponents(
         new ButtonBuilder()
-          .setCustomId(`livethread_mute:${cId}`)
-          .setLabel(`Mute #${channelName}`)
-          .setStyle(ButtonStyle.Secondary),
+          .setCustomId(
+            isMuted
+              ? `livethread_unmute:${cId}`
+              : `livethread_mute:${cId}`
+          )
+          .setLabel(
+            isMuted
+              ? `Unmute #${channelName}`
+              : `Mute #${channelName}`
+          )
+          .setStyle(isMuted ? ButtonStyle.Success : ButtonStyle.Secondary),
         new ButtonBuilder()
           .setLabel('Jump to Message ↗')
           .setStyle(ButtonStyle.Link)
@@ -565,21 +574,27 @@ async function handleSelectMenuInteraction(interaction: StringSelectMenuInteract
           targetChannelId
         );
 
-    if (deliveredCount === 0) {
-      const thread = (await interaction.client.channels.fetch(threadId).catch(() => null)) as ThreadChannel | null;
-      if (thread && thread.isThread()) {
+    const thread = (await interaction.client.channels.fetch(threadId).catch(() => null)) as ThreadChannel | null;
+    if (thread && thread.isThread()) {
+      if (deliveredCount === 0) {
         await thread.send(`› Focus switched to **${channelName}**`).catch(() => {});
+      }
+
+      if (!isAll && dbService.isChannelMuted(interaction.user.id, targetChannelId)) {
+        const unmuteRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`livethread_unmute:${targetChannelId}`)
+            .setLabel(`Unmute ${channelName}`)
+            .setStyle(ButtonStyle.Success)
+        );
+        await thread.send({
+          content: `⚠️ **${channelName}** is currently muted. You will not receive live translations until you unmute it.`,
+          components: [unmuteRow],
+        }).catch(() => {});
       }
     }
 
     await notifyThreadUnreadActivity(interaction.client, threadId, interaction.user.id, interaction.guild);
-
-    await interaction.followUp({
-      content: isAll
-        ? 'Feed focus set to All Channels (Unified Feed).'
-        : `Feed focus set to ${channelName}. Other channels will be buffered while you are focused here.`,
-      flags: MessageFlags.Ephemeral,
-    }).catch(() => {});
     return;
   }
 
@@ -1114,15 +1129,21 @@ async function resolveTargetTextChannelForUser(
       : null;
     const channelName = channel && 'name' in channel ? channel.name : 'this channel';
 
+    const thread = interaction.channel as ThreadChannel | null;
+    if (thread && thread.isThread()) {
+      const currentFocus = dbService.getThreadFocus(thread.id);
+      await updateLiveThreadControlMessage(thread, currentFocus);
+    }
+
     const unmuteRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId(`livethread_unmute:${channelId}`)
         .setLabel(`Unmute #${channelName}`)
-        .setStyle(ButtonStyle.Secondary)
+        .setStyle(ButtonStyle.Success)
     );
 
     await interaction.reply({
-      content: `Muted #${channelName}. You will no longer receive live translations for this channel.`,
+      content: `Muted #${channelName}.`,
       components: [unmuteRow],
       flags: MessageFlags.Ephemeral,
     });
@@ -1141,9 +1162,54 @@ async function resolveTargetTextChannelForUser(
       : null;
     const channelName = channel && 'name' in channel ? channel.name : 'this channel';
 
+    const thread = interaction.channel as ThreadChannel | null;
+    if (thread && thread.isThread()) {
+      const currentFocus = dbService.getThreadFocus(thread.id);
+      await updateLiveThreadControlMessage(thread, currentFocus);
+    }
+
     await interaction.update({
       content: `Unmuted #${channelName}. Live translations for this channel have been restored.`,
       components: [],
+    }).catch(async () => {
+      await interaction.reply({
+        content: `Unmuted #${channelName}. Live translations for this channel have been restored.`,
+        flags: MessageFlags.Ephemeral,
+      }).catch(() => {});
+    });
+    return;
+  }
+
+  if (customId.startsWith('livethread_list_muted:')) {
+    const threadId = customId.split(':')[1];
+    const thread = (await interaction.client.channels.fetch(threadId).catch(() => null)) as ThreadChannel | null;
+    const guildId = interaction.guildId || thread?.guildId;
+    const mutedChannelIds = dbService.getMutedChannels(interaction.user.id, guildId || undefined);
+
+    if (mutedChannelIds.length === 0) {
+      await interaction.reply({
+        content: 'You have no muted channels in this server.',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    const row = new ActionRowBuilder<ButtonBuilder>();
+    for (const cId of mutedChannelIds.slice(0, 5)) {
+      const ch = interaction.guild?.channels.cache.get(cId);
+      const name = ch && 'name' in ch ? ch.name : cId;
+      row.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`livethread_unmute:${cId}`)
+          .setLabel(`Unmute #${name}`)
+          .setStyle(ButtonStyle.Success)
+      );
+    }
+
+    await interaction.reply({
+      content: '**Muted channels:**',
+      components: [row],
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -1329,6 +1395,19 @@ async function resolveTargetTextChannelForUser(
 
       if (deliveredCount === 0) {
         await thread.send(`› Focus switched to **${channelName}**`).catch(() => {});
+      }
+
+      if (dbService.isChannelMuted(interaction.user.id, channelId)) {
+        const unmuteRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`livethread_unmute:${channelId}`)
+            .setLabel(`Unmute ${channelName}`)
+            .setStyle(ButtonStyle.Success)
+        );
+        await thread.send({
+          content: `⚠️ **${channelName}** is currently muted. You will not receive live translations until you unmute it.`,
+          components: [unmuteRow],
+        }).catch(() => {});
       }
 
       await notifyThreadUnreadActivity(interaction.client, thread.id, interaction.user.id, interaction.guild);

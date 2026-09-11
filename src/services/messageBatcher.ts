@@ -124,11 +124,20 @@ async function flushBatch(key: string, client: Client): Promise<void> {
     });
 
     const latestUrl = batch.messages[batch.messages.length - 1].url;
+    const isMuted = batch.threadUserId ? dbService.isChannelMuted(batch.threadUserId, batch.channelId) : false;
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
-        .setCustomId(`livethread_mute:${batch.channelId}`)
-        .setLabel(`Mute #${batch.channelName}`)
-        .setStyle(ButtonStyle.Secondary),
+        .setCustomId(
+          isMuted
+            ? `livethread_unmute:${batch.channelId}`
+            : `livethread_mute:${batch.channelId}`
+        )
+        .setLabel(
+          isMuted
+            ? `Unmute #${batch.channelName}`
+            : `Mute #${batch.channelName}`
+        )
+        .setStyle(isMuted ? ButtonStyle.Success : ButtonStyle.Secondary),
       new ButtonBuilder()
         .setLabel('Jump to Message ↗')
         .setStyle(ButtonStyle.Link)
