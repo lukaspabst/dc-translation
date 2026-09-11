@@ -178,9 +178,65 @@ async function runTranslationTests() {
   assert(cachedBundle !== null, 'Dynamic bundle is cached under setup_v3_tl in SQLite/MongoDB store');
 }
 
+import { getLanguageCodeFromFlag } from '../src/utils/flags';
+
+async function runFlagTests() {
+  console.log('\n--- 5. DISCORD FLAG & REACTION TESTS ---');
+
+  const flagCases = [
+    { input: '🇩🇪', expected: 'de', label: 'Germany flag' },
+    { input: '🇫🇷', expected: 'fr', label: 'France flag' },
+    { input: '🇪🇸', expected: 'es', label: 'Spain flag' },
+    { input: '🇮🇹', expected: 'it', label: 'Italy flag' },
+    { input: '🇬🇧', expected: 'en', label: 'United Kingdom flag' },
+    { input: '🇳🇱', expected: 'nl', label: 'Netherlands flag' },
+    { input: '🇵🇱', expected: 'pl', label: 'Poland flag' },
+    { input: '🇺🇦', expected: 'uk', label: 'Ukraine flag' },
+    { input: '🇷🇺', expected: 'ru', label: 'Russia flag' },
+    { input: '🇹🇷', expected: 'tr', label: 'Turkey flag' },
+    { input: '🇺🇸', expected: 'en', label: 'United States flag' },
+    { input: '🇨🇦', expected: 'en', label: 'Canada flag' },
+    { input: '🇧🇷', expected: 'pt', label: 'Brazil flag' },
+    { input: '🇲🇽', expected: 'es', label: 'Mexico flag' },
+    { input: '🇨🇱', expected: 'es', label: 'Chile flag' },
+    { input: '🇨🇴', expected: 'es', label: 'Colombia flag' },
+    { input: '🇵🇪', expected: 'es', label: 'Peru flag' },
+    { input: '🇦🇷', expected: 'es', label: 'Argentina flag' },
+    { input: '🇲🇦', expected: 'ar', label: 'Morocco flag' },
+    { input: '🇩🇿', expected: 'ar', label: 'Algeria flag' },
+    { input: '🇳🇬', expected: 'en', label: 'Nigeria flag' },
+    { input: '🇸🇦', expected: 'ar', label: 'Saudi Arabia flag' },
+    { input: '🇦🇪', expected: 'ar', label: 'UAE flag' },
+    { input: '🇪🇬', expected: 'ar', label: 'Egypt flag' },
+    { input: '🇯🇵', expected: 'ja', label: 'Japan flag' },
+    { input: '🇰🇷', expected: 'ko', label: 'South Korea flag' },
+    { input: '🇨🇳', expected: 'zh-cn', label: 'China flag' },
+    { input: '🇮🇳', expected: 'hi', label: 'India flag' },
+    { input: '🇵🇰', expected: 'ur', label: 'Pakistan flag' },
+    { input: '🇸🇬', expected: 'en', label: 'Singapore flag' },
+    { input: '🇵🇭', expected: 'tl', label: 'Philippines flag' },
+    { input: '🇻🇳', expected: 'vi', label: 'Vietnam flag' },
+    { input: '🇹🇭', expected: 'th', label: 'Thailand flag' },
+    { input: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', expected: 'en', label: 'England regional flag' },
+    { input: '🏴󠁧󠁢󠁳󠁣󠁴󠁿', expected: 'gd', label: 'Scotland regional flag' },
+    { input: '🏴󠁧󠁢󠁷󠁬󠁳󠁿', expected: 'cy', label: 'Wales regional flag' },
+    { input: 'flag_de', expected: 'de', label: 'Discord emoji shortcode flag_de' },
+    { input: ':flag_us:', expected: 'en', label: 'Discord emoji markdown :flag_us:' },
+    { input: 'flag_fr', expected: 'fr', label: 'Discord emoji shortcode flag_fr' },
+    { input: 'flag_england', expected: 'en', label: 'Discord shortcode flag_england' },
+    { input: 'de', expected: 'de', label: 'Direct language code de' },
+    { input: 'ja', expected: 'ja', label: 'Direct language code ja' },
+  ];
+
+  for (const c of flagCases) {
+    const res = getLanguageCodeFromFlag(c.input);
+    assert(res === c.expected, `${c.label} resolves to "${c.expected}"`);
+  }
+}
+
 async function main() {
   console.log('====================================================');
-  console.log('RUNNING FULL SYSTEM TEST SUITE: SECURITY, FUNCTIONALITY, DOCS, TRANSLATIONS');
+  console.log('RUNNING FULL SYSTEM TEST SUITE: SECURITY, FUNCTIONALITY, DOCS, TRANSLATIONS, FLAGS');
   console.log('====================================================');
 
   await initDatabase();
@@ -189,6 +245,7 @@ async function main() {
   await runFunctionalityTests();
   await runDocuTests();
   await runTranslationTests();
+  await runFlagTests();
 
   console.log('\n====================================================');
   console.log(`TEST RESULTS: ${passed} PASSED, ${failed} FAILED`);

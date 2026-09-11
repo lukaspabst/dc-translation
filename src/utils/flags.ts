@@ -344,70 +344,86 @@ export function mapDiscordLocaleToLanguage(locale?: string): string {
   return match ? match.code : primary;
 }
 
-export function getLanguageCodeFromFlag(emoji: string): string | null {
-  const flagMap: Record<string, string> = {
-    '🇩🇪': 'de', '🇦🇹': 'de', '🇨🇭': 'de',
-    '🇬🇧': 'en', '🇺🇸': 'en', '🇨🇦': 'en', '🇦🇺': 'en', '🇳🇿': 'en', '🇮🇪': 'en',
-    '🇪🇸': 'es', '🇲🇽': 'es', '🇦🇷': 'es', '🇨🇴': 'es', '🇨🇱': 'es', '🇵🇪': 'es',
-    '🇫🇷': 'fr', '🇧🇪': 'fr', '🇲🇨': 'fr',
-    '🇮🇹': 'it', '🇻🇦': 'it',
-    '🇵🇹': 'pt', '🇧🇷': 'pt',
-    '🇳🇱': 'nl',
-    '🇸🇪': 'sv',
-    '🇩🇰': 'da',
-    '🇫🇮': 'fi',
-    '🇳🇴': 'no',
-    '🇮🇸': 'is',
-    '🇷🇺': 'ru',
-    '🇵🇱': 'pl',
-    '🇺🇦': 'uk',
-    '🇨🇿': 'cs',
-    '🇭🇺': 'hu',
-    '🇷🇴': 'ro',
-    '🇬🇷': 'el',
-    '🇧🇬': 'bg',
-    '🇸🇰': 'sk',
-    '🇭🇷': 'hr',
-    '🇷🇸': 'sr',
-    '🇸🇮': 'sl',
-    '🇪🇪': 'et',
-    '🇱🇻': 'lv',
-    '🇱🇹': 'lt',
-    '🇯🇵': 'ja',
-    '🇰🇷': 'ko',
-    '🇨🇳': 'zh-cn', '🇹🇼': 'zh-tw', '🇭🇰': 'zh-tw',
-    '🇻🇳': 'vi',
-    '🇹🇭': 'th',
-    '🇮🇩': 'id',
-    '🇲🇾': 'ms',
-    '🇵🇭': 'tl',
-    '🇮🇳': 'hi',
-    '🇵🇰': 'ur',
-    '🇧🇩': 'bn',
-    '🇹🇷': 'tr',
-    '🇮🇱': 'he',
-    '🇸🇦': 'ar', '🇦🇪': 'ar', '🇪🇬': 'ar', '🇶🇦': 'ar', '🇯🇴': 'ar',
-    '🇮🇷': 'fa',
-    '🇿🇦': 'af',
-    '🇦🇱': 'sq',
-    '🇪🇹': 'am',
-    '🇦🇲': 'hy',
-    '🇦🇿': 'az',
-    '🇧🇦': 'bs',
-    '🇬🇪': 'ka',
-    '🇭🇹': 'ht',
-    '🇰🇿': 'kk',
-    '🇰🇭': 'km',
-    '🇱🇦': 'lo',
-    '🇲🇰': 'mk',
-    '🇲🇳': 'mn',
-    '🇲🇲': 'my',
-    '🇳🇵': 'ne',
-    '🇸🇴': 'so',
-    '🇺🇿': 'uz',
-  };
+const COUNTRY_CODE_TO_LANGUAGE: Record<string, string> = {
+  DE: 'de', AT: 'de', CH: 'de', LI: 'de',
+  US: 'en', GB: 'en', CA: 'en', AU: 'en', NZ: 'en', IE: 'en', ZA: 'en', SG: 'en',
+  JM: 'en', BS: 'en', TT: 'en', BB: 'en', GY: 'en', BZ: 'en', AG: 'en', DM: 'en',
+  GD: 'en', KN: 'en', LC: 'en', VC: 'en', FJ: 'en', PG: 'en', SB: 'en', VU: 'en',
+  WS: 'en', TO: 'en', TV: 'en', NR: 'en', KI: 'en', MH: 'en', FM: 'en', PW: 'en',
+  BW: 'en', GM: 'en', GH: 'en', LR: 'en', MW: 'en', NA: 'en', NG: 'en', SL: 'en',
+  SZ: 'en', UG: 'en', ZM: 'en', ZW: 'en', KY: 'en', BM: 'en', VG: 'en', VI: 'en',
+  AI: 'en', MS: 'en', TC: 'en', GI: 'en', IM: 'en', JE: 'en', GG: 'en', SH: 'en',
+  FK: 'en', GU: 'en', MP: 'en', AS: 'en', CK: 'en', NU: 'en', PN: 'en', TK: 'en',
+  NF: 'en', CX: 'en', CC: 'en', IO: 'en',
+  ES: 'es', MX: 'es', AR: 'es', CO: 'es', CL: 'es', PE: 'es', VE: 'es', EC: 'es',
+  GT: 'es', CU: 'es', BO: 'es', DO: 'es', HN: 'es', PY: 'es', SV: 'es', NI: 'es',
+  CR: 'es', PR: 'es', PA: 'es', UY: 'es', GQ: 'es',
+  FR: 'fr', BE: 'fr', MC: 'fr', SN: 'fr', CI: 'fr', CM: 'fr', CD: 'fr', CG: 'fr',
+  ML: 'fr', BF: 'fr', NE: 'fr', GN: 'fr', TG: 'fr', BJ: 'fr', GA: 'fr', DJ: 'fr',
+  KM: 'fr', HT: 'fr', LU: 'fr', TD: 'fr', CF: 'fr', BI: 'fr', RW: 'fr', SC: 'fr',
+  RE: 'fr', GP: 'fr', MQ: 'fr', GF: 'fr', PF: 'fr', NC: 'fr', PM: 'fr', WF: 'fr',
+  BL: 'fr', MF: 'fr', YT: 'fr',
+  IT: 'it', SM: 'it', VA: 'it',
+  PT: 'pt', BR: 'pt', AO: 'pt', MZ: 'pt', GW: 'pt', CV: 'pt', ST: 'pt', TL: 'pt',
+  RU: 'ru', BY: 'ru', KZ: 'kk', KG: 'ky',
+  UA: 'uk',
+  PL: 'pl',
+  NL: 'nl', AW: 'nl', CW: 'nl', SX: 'nl', BQ: 'nl', SR: 'nl',
+  TR: 'tr',
+  SA: 'ar', AE: 'ar', EG: 'ar', IQ: 'ar', JO: 'ar', LB: 'ar', KW: 'ar', QA: 'ar',
+  BH: 'ar', OM: 'ar', YE: 'ar', SY: 'ar', LY: 'ar', TN: 'ar', DZ: 'ar', MA: 'ar',
+  SD: 'ar', MR: 'ar', PS: 'ar', EH: 'ar', SO: 'ar',
+  IR: 'fa', AF: 'fa',
+  IL: 'he',
+  IN: 'hi', PK: 'ur', BD: 'bn', LK: 'si', NP: 'ne', BT: 'dz',
+  JP: 'ja', KR: 'ko', KP: 'ko', CN: 'zh-cn', TW: 'zh-tw', HK: 'zh-tw', MO: 'zh-tw',
+  VN: 'vi', TH: 'th', ID: 'id', MY: 'ms', BN: 'ms', PH: 'tl',
+  MM: 'my', KH: 'km', LA: 'lo', MN: 'mn',
+  SE: 'sv', AX: 'sv', NO: 'no', SJ: 'no', BV: 'no', DK: 'da', GL: 'da', FO: 'da',
+  FI: 'fi', IS: 'is',
+  GR: 'el', CY: 'el', CZ: 'cs', SK: 'sk', HU: 'hu', RO: 'ro', MD: 'ro', BG: 'bg',
+  HR: 'hr', RS: 'sr', ME: 'sr', SI: 'sl', BA: 'bs', MK: 'mk', AL: 'sq', XK: 'sq',
+  EE: 'et', LV: 'lv', LT: 'lt',
+  GE: 'ka', AM: 'hy', AZ: 'az', UZ: 'uz', TM: 'tk', TJ: 'tg',
+  ET: 'am', KE: 'sw', TZ: 'sw', MG: 'mg',
+  EU: 'en', UN: 'en',
+};
 
-  return flagMap[emoji] || null;
+export function getLanguageCodeFromFlag(emoji: string): string | null {
+  if (!emoji) return null;
+  const raw = emoji.trim();
+
+  if (raw.includes('\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}') || raw.toLowerCase().includes('england')) return 'en';
+  if (raw.includes('\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}') || raw.toLowerCase().includes('scotland')) return 'gd';
+  if (raw.includes('\u{E0067}\u{E0062}\u{E0077}\u{E006C}\u{E0073}') || raw.toLowerCase().includes('wales')) return 'cy';
+
+  const regIndicators: number[] = [];
+  for (const ch of raw) {
+    const cp = ch.codePointAt(0);
+    if (cp && cp >= 0x1f1e6 && cp <= 0x1f1ff) {
+      regIndicators.push(cp);
+    }
+  }
+
+  if (regIndicators.length >= 2) {
+    const c1 = String.fromCharCode(65 + (regIndicators[0] - 0x1f1e6));
+    const c2 = String.fromCharCode(65 + (regIndicators[1] - 0x1f1e6));
+    const cc = `${c1}${c2}`;
+    if (COUNTRY_CODE_TO_LANGUAGE[cc]) return COUNTRY_CODE_TO_LANGUAGE[cc];
+  }
+
+  const clean = raw.toLowerCase().replace(/^:?flag[_-]?/, '').replace(/:$/, '').trim();
+  const upperCC = clean.toUpperCase();
+  if (COUNTRY_CODE_TO_LANGUAGE[upperCC]) {
+    return COUNTRY_CODE_TO_LANGUAGE[upperCC];
+  }
+
+  const normalized = normalizeLanguageCode(clean);
+  if (ALL_SUPPORTED_LANGUAGES.some((l) => l.code === normalized)) {
+    return normalized;
+  }
+
+  return null;
 }
 
 export function normalizeLanguageCode(code: string): string {

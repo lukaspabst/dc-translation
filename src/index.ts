@@ -88,6 +88,7 @@ const client = new Client({
     GatewayIntentBits.DirectMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMessageReactions,
+    GatewayIntentBits.DirectMessageReactions,
   ],
   partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.User],
 });
@@ -1792,6 +1793,8 @@ client.on(Events.MessageReactionAdd, async (reaction: MessageReaction | unknown,
 
   const targetLanguage = getLanguageCodeFromFlag(emojiName);
   if (!targetLanguage) return;
+
+  console.log(`[Reaction] Emoji: "${emojiName}" -> Target: "${targetLanguage}" from user: ${discordUser.id}`);
 
   try {
     const userPrefs = dbService.getUserPreferences(discordUser.id);
