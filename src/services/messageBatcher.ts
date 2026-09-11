@@ -7,6 +7,7 @@ import {
 } from 'discord.js';
 import { translationService } from './translator';
 import { createBatchedChannelEmbed, BatchedMessageItem } from '../utils/embeds';
+import { dbService } from '../db/database';
 
 interface QueuedMessage {
   id: string;
@@ -137,7 +138,10 @@ async function flushBatch(key: string, client: Client): Promise<void> {
     const channel = (await client.channels.fetch(batch.threadId).catch(() => null)) as
       | ThreadChannel
       | null;
-    if (!channel || !channel.isThread()) return;
+    if (!channel || !channel.isThread()) {
+      dbService.removeLiveThread(batch.threadId);
+      return;
+    }
 
     if (channel.archived) {
       await channel.setArchived(false).catch(() => {});

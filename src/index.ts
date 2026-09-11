@@ -62,19 +62,6 @@ import {
 } from './utils/flags';
 import { dbService, initDatabase, PermissionScope, BufferedMessageItem, ChannelMessageItem } from './db/database';
 import {
-  initRedis,
-  getGuildSubscribers,
-  addGuildSubscriber,
-  removeGuildSubscriber,
-  getUserGuildThread,
-  setUserGuildThread,
-  removeUserGuildThread,
-  getCachedTranslation,
-  setCachedTranslation,
-} from './db/redis';
-import { sendWebhookTranslation } from './services/webhookManager';
-import { ensureUserGuildThread } from './services/threadManager';
-import {
   createModernTranslationEmbed,
   createLiveThreadMessageEmbed,
   createBatchedChannelEmbed,
@@ -127,43 +114,11 @@ commands.set(
 );
 commands.set(broadcastSetupCommand.data.name, broadcastSetupCommand as unknown as CommandModule);
 
-async function rehydrateRedisState(): Promise<void> {
-  try {
-    const liveThreads = dbService.getAllLiveThreads();
-    for (const t of liveThreads) {
-      if (t.guild_id) {
-        await addGuildSubscriber(t.guild_id, t.discord_id);
-        await setUserGuildThread(t.guild_id, t.discord_id, t.thread_id);
-      }
-    }
-    const autoUsers = dbService.getAllAutoTranslateThreadUsers();
-    for (const u of autoUsers) {
-      for (const guild of client.guilds.cache.values()) {
-        const member =
-          guild.members.cache.get(u.discord_id) ||
-          (await guild.members.fetch(u.discord_id).catch(() => null));
-        if (member) {
-          await addGuildSubscriber(guild.id, u.discord_id);
-        }
-      }
-    }
-    if (liveThreads.length > 0 || autoUsers.length > 0) {
-      console.log(
-        `Rehydrated ${liveThreads.length} live threads and ${autoUsers.length} auto-translate users into Redis.`
-      );
-    }
-  } catch (err) {
-    console.warn('Notice: Redis state rehydration skipped or failed:', err);
-  }
-}
-
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`Ready! Logged in as ${readyClient.user.tag}`);
   initDeepL(process.env.DEEPL_AUTH_KEY);
   initGoogleApi(process.env.GOOGLE_TRANSLATE_API_KEY);
-  await initRedis();
   await initDatabase();
-  await rehydrateRedisState();
 });
 
 client.on(Events.InteractionCreate, async (interaction: Interaction) => {
@@ -460,7 +415,6 @@ async function handleSelectMenuInteraction(interaction: StringSelectMenuInteract
     dbService.setUserLanguage(interaction.user.id, selected);
     if (interaction.guild) {
       await syncUserLiveThreadLanguage(interaction.guild, interaction.user.id, selected);
-      await addGuildSubscriber(interaction.guild.id, interaction.user.id);
     }
     const prefs = dbService.getUserPreferences(interaction.user.id);
     const effectiveLang = getEffectiveLanguage(selected, interaction.locale);
@@ -477,7 +431,6 @@ async function handleSelectMenuInteraction(interaction: StringSelectMenuInteract
     dbService.setUserLanguage(interaction.user.id, selected);
     if (interaction.guild) {
       await syncUserLiveThreadLanguage(interaction.guild, interaction.user.id, selected);
-      await addGuildSubscriber(interaction.guild.id, interaction.user.id);
     }
     const prefs = dbService.getUserPreferences(interaction.user.id);
     const effectiveLang = getEffectiveLanguage(selected, interaction.locale);
@@ -1070,13 +1023,6 @@ async function resolveTargetTextChannelForUser(
     if (!threadId) return;
 
     dbService.removeLiveThread(threadId);
-    if (interaction.guildId) {
-      await removeGuildSubscriber(interaction.guildId, interaction.user.id);
-      await removeUserGuildThread(interaction.guildId, interaction.user.id);
-    }
-    const userPrefs = dbService.getUserPreferences(interaction.user.id);
-    userPrefs.auto_translate_thread = false;
-    await dbService.saveUserPreferences(userPrefs);
 
     try {
       const threadChannel = await client.channels.fetch(threadId).catch(() => null);
@@ -1622,7 +1568,6 @@ async function handleModalSubmitInteraction(interaction: ModalSubmitInteraction)
       dbService.setUserLanguage(interaction.user.id, chosenLang);
       if (interaction.guild) {
         await syncUserLiveThreadLanguage(interaction.guild, interaction.user.id, chosenLang);
-        await addGuildSubscriber(interaction.guild.id, interaction.user.id);
       }
       prefs = dbService.getUserPreferences(interaction.user.id);
       const effectiveLang = getEffectiveLanguage(chosenLang, interaction.locale);
@@ -1866,112 +1811,214 @@ client.on(Events.GuildCreate, async (guild) => {
   }
 });
 
-client.on(Events.GuildMemberAdd, async () => {});
+client.on(Events.GuildMemberAdd, async (member) => {
+  if (member.user.bot) return;
+  const prefs = dbService.getUserPreferences(member.id);
+  if (!prefs.setup_completed && !dmPromptedUsers.has(member.id)) {
+    dmPromptedUsers.add(member.id);
+    const labels = await getDynamicSetupLabels(member.guild.preferredLocale);
+    const { embed, components, files } = setupCommand.buildFirstUseIntercept(
+      member.user.username,
+      member.guild.preferredLocale,
+      labels
+    );
+    await member.send({ embeds: [embed], components, files }).catch(() => {});
+  }
+});
 
 client.on(Events.MessageCreate, async (message: Message) => {
   if (message.author.bot || !message.guild) return;
   if (!message.content || message.content.trim().length < 2) return;
   if (message.content.startsWith('/') || message.content.startsWith('!')) return;
   if (isPureMediaOrUrl(message.content)) return;
-  if (message.channel.type !== ChannelType.GuildText) return;
 
-  const textChannel = message.channel as TextChannel;
-  let subscribers = await getGuildSubscribers(message.guild.id);
-  if (subscribers.length === 0) {
-    const liveThreads = dbService.getLiveThreadsForGuild(message.guild.id);
-    if (liveThreads.length > 0) {
-      for (const lt of liveThreads) {
-        await addGuildSubscriber(message.guild.id, lt.discord_id);
-        await setUserGuildThread(message.guild.id, lt.discord_id, lt.thread_id);
-      }
-      subscribers = await getGuildSubscribers(message.guild.id);
-    }
+  const authorPrefs = dbService.getUserPreferences(message.author.id);
+  if (!authorPrefs.setup_completed && !dmPromptedUsers.has(message.author.id)) {
+    dmPromptedUsers.add(message.author.id);
+    const serverLocale = message.guild.preferredLocale || 'en';
+    const labels = await getDynamicSetupLabels(serverLocale);
+    const { embed, components, files } = setupCommand.buildFirstUseIntercept(
+      message.author.username,
+      serverLocale,
+      labels
+    );
+    await message.author.send({ embeds: [embed], components, files }).catch(() => {});
   }
 
-  const recipientIds = subscribers.filter((id) => id !== message.author.id);
-  if (recipientIds.length === 0) return;
+  const subscribers = dbService.getAllAutoTranslateDmUsers();
+  for (const subscriber of subscribers) {
+    if (subscriber.discord_id === message.author.id) continue;
 
-  for (const recipientId of recipientIds) {
     try {
       const member =
-        message.guild.members.cache.get(recipientId) ||
-        (await message.guild.members.fetch(recipientId).catch(() => null));
+        message.guild.members.cache.get(subscriber.discord_id) ||
+        (await message.guild.members.fetch(subscriber.discord_id).catch(() => null));
       if (!member) continue;
 
-      const perms = textChannel.permissionsFor(member);
+      const channelPerms =
+        'permissionsFor' in message.channel
+          ? (message.channel as TextChannel).permissionsFor(member)
+          : null;
       if (
-        !perms ||
-        !perms.has('ViewChannel') ||
-        !perms.has('ReadMessageHistory')
+        !channelPerms ||
+        !channelPerms.has('ViewChannel') ||
+        !channelPerms.has('ReadMessageHistory')
       ) {
         continue;
       }
 
-      if (dbService.isChannelMuted(recipientId, textChannel.id)) {
+      const translated = await translationService.translateWithGoogle(
+        message.content,
+        subscriber.target_language
+      );
+
+      if (translated.trim().toLowerCase() === message.content.trim().toLowerCase()) {
         continue;
       }
 
-      const prefs = dbService.getUserPreferences(recipientId);
-      if (!prefs.auto_translate_thread) {
-        continue;
-      }
+      const user = await client.users.fetch(subscriber.discord_id).catch(() => null);
+      if (!user) continue;
 
-      const thread = await ensureUserGuildThread({
-        guild: message.guild,
-        channel: textChannel,
-        user: member.user,
-        targetLanguage: prefs.target_language,
-      });
-      if (!thread) continue;
+      const channelName =
+        'name' in message.channel ? (message.channel as { name: string }).name : 'chat';
+      const embed = createLiveThreadMessageEmbed(
+        message.author,
+        translated,
+        subscriber.target_language,
+        channelName,
+        message.content,
+        subscriber.show_original === 1
+      );
 
-      const currentFocus = dbService.getThreadFocus(thread.id);
-      if (currentFocus !== 'all' && currentFocus !== textChannel.id) {
-        continue;
-      }
+      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setLabel('Jump to Message ↗')
+          .setStyle(ButtonStyle.Link)
+          .setURL(message.url)
+      );
 
-      let translated = await getCachedTranslation(message.content, prefs.target_language);
-      if (!translated) {
-        if (prefs.preferred_engine === 'deepl') {
-          translated = await translationService.translateWithDeepL(
-            message.content,
-            prefs.target_language
-          );
-        } else {
-          translated = await translationService.translateWithGoogle(
-            message.content,
-            prefs.target_language
-          );
-        }
-        if (translated) {
-          await setCachedTranslation(message.content, prefs.target_language, translated);
-        }
-      }
-
-      if (!translated || translated.trim().toLowerCase() === message.content.trim().toLowerCase()) {
-        continue;
-      }
-
-      let contentToSend = translated;
-      if (prefs.show_original === 1) {
-        const truncatedOriginal =
-          message.content.length > 250
-            ? `${message.content.slice(0, 250)}...`
-            : message.content;
-        contentToSend += `\n> *${truncatedOriginal}*`;
-      }
-
-      const authorName = message.author.displayName || message.author.username;
-      const authorAvatar = message.author.displayAvatarURL({ size: 128 });
-
-      await sendWebhookTranslation({
-        thread,
-        username: authorName,
-        avatarUrl: authorAvatar,
-        content: contentToSend,
-        sourceChannelName: textChannel.name,
-      });
+      await user.send({ embeds: [embed], components: [row] }).catch(() => {});
     } catch (err) {
-      console.error(`Error relaying webhook translation for ${recipientId}:`, err);
+      console.error('Error sending auto-DM translation:', err);
+    }
+  }
+
+  if (message.channel.type === ChannelType.GuildText) {
+    const textChannel = message.channel as TextChannel;
+    const guildSettings = dbService.getGuildSettings(message.guild.id);
+    const threadsAllowed = guildSettings.allow_live_threads !== 'disabled';
+
+    if (threadsAllowed) {
+      const autoThreadUsers = dbService.getAllAutoTranslateThreadUsers();
+      for (const autoUser of autoThreadUsers) {
+        const existing = dbService.getUserLiveThread(autoUser.discord_id, message.guild.id);
+        let activeThread: ThreadChannel | null = null;
+        if (existing) {
+          activeThread = (await client.channels
+            .fetch(existing.thread_id)
+            .catch(() => null)) as ThreadChannel | null;
+          if (!activeThread || !activeThread.isThread()) {
+            dbService.removeLiveThread(existing.thread_id);
+            activeThread = null;
+          }
+        }
+
+        if (!activeThread) {
+          const member =
+            message.guild.members.cache.get(autoUser.discord_id) ||
+            (await message.guild.members.fetch(autoUser.discord_id).catch(() => null));
+          if (member) {
+            if (
+              guildSettings.allow_live_threads !== 'admin_only' ||
+              member.permissions.has('ManageGuild') ||
+              member.permissions.has('Administrator')
+            ) {
+              await ensureLiveThread({
+                channel: textChannel,
+                user: member.user,
+                targetLanguage: autoUser.target_language,
+              }).catch(() => null);
+            }
+          }
+        }
+      }
+
+      dbService.saveChannelMessage({
+        id: message.id,
+        guild_id: message.guild.id,
+        channel_id: textChannel.id,
+        channel_name: textChannel.name,
+        author_name: message.author.displayName || message.author.username,
+        author_avatar: message.author.displayAvatarURL({ size: 64 }),
+        original_text: message.content,
+        url: message.url,
+        created_at: Math.floor(message.createdTimestamp / 1000),
+      });
+
+      const liveThreads = dbService.getLiveThreadsForGuild(message.guild.id);
+      for (const lt of liveThreads) {
+        if (lt.discord_id === message.author.id) continue;
+
+        try {
+          const member =
+            message.guild.members.cache.get(lt.discord_id) ||
+            (await message.guild.members.fetch(lt.discord_id).catch(() => null));
+          if (!member) continue;
+
+          if (guildSettings.allow_live_threads === 'admin_only') {
+            const isStaff =
+              member.permissions.has('ManageGuild') ||
+              member.permissions.has('Administrator');
+            if (!isStaff) continue;
+          }
+
+          const perms = textChannel.permissionsFor(member);
+          if (
+            !perms ||
+            !perms.has('ViewChannel') ||
+            !perms.has('ReadMessageHistory')
+          ) {
+            continue;
+          }
+
+          if (dbService.isChannelMuted(lt.discord_id, textChannel.id)) {
+            continue;
+          }
+
+          const currentFocus = dbService.getThreadFocus(lt.thread_id);
+          const isFocused = currentFocus === 'all' || currentFocus === textChannel.id;
+
+          const prefs = dbService.getUserPreferences(lt.discord_id);
+          const channelName = textChannel.name;
+          const authorName = message.author.displayName || message.author.username;
+          const authorAvatar = message.author.displayAvatarURL({ size: 64 });
+
+          if (isFocused) {
+            dbService.updateUserChannelRead(lt.discord_id, textChannel.id, Math.floor(Date.now() / 1000));
+            enqueueThreadMessage({
+              threadId: lt.thread_id,
+              threadUserId: lt.discord_id,
+              channelId: textChannel.id,
+              channelName,
+              targetLanguage: lt.target_language,
+              showOriginal: prefs.show_original === 1,
+              message: {
+                id: message.id,
+                content: message.content,
+                authorId: message.author.id,
+                authorName,
+                authorAvatar,
+                url: message.url,
+              },
+              client,
+            });
+          } else {
+            await notifyThreadUnreadActivity(client, lt.thread_id, lt.discord_id, message.guild);
+          }
+        } catch (err) {
+          console.error('Error queuing batched thread message:', err);
+        }
+      }
     }
   }
 });
