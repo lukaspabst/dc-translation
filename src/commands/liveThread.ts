@@ -211,6 +211,9 @@ export async function ensureLiveThread(params: {
       if (existingThread.archived) {
         await existingThread.setArchived(false).catch(() => {});
       }
+      if (!existingThread.locked) {
+        await existingThread.setLocked(true).catch(() => {});
+      }
       await existingThread.members.add(user.id).catch(() => {});
 
       if (existing.target_language !== targetLanguage) {
@@ -282,6 +285,9 @@ export async function ensureLiveThread(params: {
     if (discordExistingThread.archived) {
       await discordExistingThread.setArchived(false).catch(() => {});
     }
+    if (!discordExistingThread.locked) {
+      await discordExistingThread.setLocked(true).catch(() => {});
+    }
     await discordExistingThread.members.add(user.id).catch(() => {});
 
     dbService.registerLiveThread(
@@ -309,6 +315,7 @@ export async function ensureLiveThread(params: {
     });
 
     await thread.members.add(user.id).catch(() => {});
+    await thread.setLocked(true).catch(() => {});
 
     dbService.registerLiveThread(
       user.id,

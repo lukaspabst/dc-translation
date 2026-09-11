@@ -147,6 +147,10 @@ async function flushBatch(key: string, client: Client): Promise<void> {
       await channel.setArchived(false).catch(() => {});
     }
 
+    if (!channel.locked) {
+      await channel.setLocked(true).catch(() => {});
+    }
+
     await channel.send({ embeds: [embed], components: [row] }).catch((err) => {
       console.warn('Failed to send batched message to thread:', err);
     });

@@ -871,6 +871,22 @@ export const dbService = {
     }
   },
 
+  getLiveThread(threadId: string): LiveThreadRecord | null {
+    try {
+      const row = sqliteDb
+        .prepare('SELECT * FROM live_threads WHERE thread_id = ?')
+        .get(threadId) as LiveThreadRecord | undefined;
+      return row || null;
+    } catch (err) {
+      console.error('Error fetching live thread by thread_id:', err);
+      return null;
+    }
+  },
+
+  isLiveThread(threadId: string): boolean {
+    return this.getLiveThread(threadId) !== null;
+  },
+
   getUserLiveThread(discordId: string, guildId?: string): LiveThreadRecord | null {
     try {
       if (guildId) {

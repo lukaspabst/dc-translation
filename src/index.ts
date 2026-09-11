@@ -1828,6 +1828,23 @@ client.on(Events.GuildMemberAdd, async (member) => {
 
 client.on(Events.MessageCreate, async (message: Message) => {
   if (message.author.bot || !message.guild) return;
+
+  if (message.channel.isThread()) {
+    const threadChannel = message.channel as ThreadChannel;
+    const isTranslationThread =
+      dbService.isLiveThread(threadChannel.id) ||
+      threadChannel.name.startsWith('Translations ›') ||
+      threadChannel.name.startsWith('Translations -');
+
+    if (isTranslationThread) {
+      await message.delete().catch(() => {});
+      if (!threadChannel.locked) {
+        await threadChannel.setLocked(true).catch(() => {});
+      }
+    }
+    return;
+  }
+
   if (!message.content || message.content.trim().length < 2) return;
   if (message.content.startsWith('/') || message.content.startsWith('!')) return;
   if (isPureMediaOrUrl(message.content)) return;
