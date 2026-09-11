@@ -911,6 +911,15 @@ export const dbService = {
     }
   },
 
+  getAllLiveThreads(): LiveThreadRecord[] {
+    try {
+      return sqliteDb.prepare('SELECT * FROM live_threads').all() as LiveThreadRecord[];
+    } catch (err) {
+      console.error('Error fetching all live threads:', err);
+      return [];
+    }
+  },
+
   getUserLiveThreadInChannel(discordId: string, channelId: string): LiveThreadRecord | null {
     try {
       const row = sqliteDb

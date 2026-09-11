@@ -18,6 +18,15 @@ import {
   StringSelectMenuOptionBuilder,
 } from 'discord.js';
 import { dbService } from '../db/database';
+import {
+  addGuildSubscriber,
+  removeGuildSubscriber,
+  removeUserGuildThread,
+} from '../db/redis';
+import {
+  ensureUserGuildThread,
+  buildLiveThreadControlComponents,
+} from '../services/threadManager';
 import { normalizeLanguageCode, searchLanguages, POPULAR_LANGUAGES } from '../utils/flags';
 
 export const data = new SlashCommandBuilder()
@@ -123,7 +132,8 @@ export async function execute(interaction: ChatInputCommandInteraction<CacheType
       ? normalizeLanguageCode(requestedLang)
       : userPrefs.target_language;
 
-    const thread = await ensureLiveThread({
+    const thread = await ensureUserGuildThread({
+      guild: textChannel.guild,
       channel: textChannel,
       user: interaction.user,
       targetLanguage,
@@ -137,13 +147,18 @@ export async function execute(interaction: ChatInputCommandInteraction<CacheType
       return;
     }
 
+    await addGuildSubscriber(textChannel.guildId, interaction.user.id);
+
     await interaction.editReply({
-      content: `Your private live translation thread is ready: <#${thread.id}>\nClick the thread link to view real-time translations alongside the main chat!`,
+      content: `Your private live translation thread is ready: <#${thread.id}>\nClick the thread link to view real-time translations from all channels!`,
     });
     return;
   }
 
   if (subcommand === 'stop') {
+    await removeGuildSubscriber(textChannel.guildId, interaction.user.id);
+    await removeUserGuildThread(textChannel.guildId, interaction.user.id);
+
     const existing =
       dbService.getUserLiveThread(interaction.user.id, textChannel.guildId) ||
       dbService.getUserLiveThreadInChannel(interaction.user.id, textChannel.id);
@@ -162,7 +177,7 @@ export async function execute(interaction: ChatInputCommandInteraction<CacheType
         .fetch(existing.thread_id)
         .catch(() => null)) as ThreadChannel | null;
       if (thread && thread.isThread()) {
-        await thread.send('Live translation thread stopped by user. Archiving thread...').catch(() => {});
+        await thread.send('Live translation feed stopped by user. Archiving thread...').catch(() => {});
         await thread.setArchived(true).catch(() => {});
       }
     } catch (e) {
@@ -176,238 +191,8 @@ export async function execute(interaction: ChatInputCommandInteraction<CacheType
   }
 }
 
-export async function ensureLiveThread(params: {
-  channel: TextChannel;
-  user: { id: string; username: string; tag?: string };
-  targetLanguage: string;
-}): Promise<ThreadChannel | null> {
-  const { channel, user, targetLanguage } = params;
-
-  const botMember =
-    channel.guild.members.me ||
-    (await channel.guild.members.fetchMe().catch(() => null));
-  if (!botMember) return null;
-
-  const perms = channel.permissionsFor(botMember);
-  if (
-    !perms ||
-    !perms.has('ViewChannel') ||
-    !perms.has('SendMessagesInThreads') ||
-    !perms.has('CreatePrivateThreads')
-  ) {
-    return null;
-  }
-
-  const existing =
-    dbService.getUserLiveThreadInChannel(user.id, channel.id) ||
-    dbService.getUserLiveThread(user.id, channel.guildId);
-
-  if (existing) {
-    const existingThread = (await channel.guild.channels
-      .fetch(existing.thread_id)
-      .catch(() => null)) as ThreadChannel | null;
-
-    if (existingThread && existingThread.isThread()) {
-      if (existingThread.archived) {
-        await existingThread.setArchived(false).catch(() => {});
-      }
-      await existingThread.members.add(user.id).catch(() => {});
-
-      if (existing.target_language !== targetLanguage) {
-        dbService.updateLiveThreadLanguage(existing.thread_id, targetLanguage);
-        const langInfo =
-          POPULAR_LANGUAGES.find((l) => l.code === targetLanguage) || {
-            name: targetLanguage.toUpperCase(),
-          };
-        const updateEmbed = new EmbedBuilder()
-          .setColor('#8B5CF6')
-          .setTitle('Target Language Updated')
-          .setDescription(
-            `Your live translation feed has been updated to **${langInfo.name}** (\`${targetLanguage}\`). All incoming messages will now be translated into ${langInfo.name}.`
-          )
-          .setFooter({ text: 'Done by your R4 Rimuru • For feedback feel free to msg me' });
-        await existingThread.send({ embeds: [updateEmbed] }).catch(() => {});
-      }
-
-      return existingThread;
-    }
-
-    dbService.removeLiveThread(existing.thread_id);
-  }
-
-  const threadTargetName = `Translations › ${user.username}`;
-  let discordExistingThread: ThreadChannel | null = null;
-
-  const cachedThread = channel.threads.cache.find(
-    (t) =>
-      t.isThread() &&
-      t.parentId === channel.id &&
-      (t.name === threadTargetName || t.name === `Translations - ${user.username}`)
-  );
-  if (cachedThread) {
-    discordExistingThread = cachedThread;
-  }
-
-  if (!discordExistingThread) {
-    try {
-      const active = await channel.threads.fetchActive();
-      const matches = active.threads.filter(
-        (t) => t.name === threadTargetName || t.name === `Translations - ${user.username}`
-      );
-      if (matches.size > 0) {
-        discordExistingThread =
-          matches.sort((a, b) => (b.createdTimestamp || 0) - (a.createdTimestamp || 0)).first() || null;
-      }
-    } catch (e) {
-      console.warn('Could not fetch active threads from channel:', e);
-    }
-  }
-
-  if (!discordExistingThread) {
-    try {
-      const archived = await channel.threads.fetchArchived({ type: 'private', fetchAll: false });
-      const matches = archived.threads.filter(
-        (t) => t.name === threadTargetName || t.name === `Translations - ${user.username}`
-      );
-      if (matches.size > 0) {
-        discordExistingThread =
-          matches.sort((a, b) => (b.createdTimestamp || 0) - (a.createdTimestamp || 0)).first() || null;
-      }
-    } catch (e) {
-      console.warn('Could not fetch archived private threads from channel:', e);
-    }
-  }
-
-  if (discordExistingThread) {
-    if (discordExistingThread.archived) {
-      await discordExistingThread.setArchived(false).catch(() => {});
-    }
-    await discordExistingThread.members.add(user.id).catch(() => {});
-
-    dbService.registerLiveThread(
-      user.id,
-      channel.guildId,
-      channel.id,
-      discordExistingThread.id,
-      targetLanguage
-    );
-
-    return discordExistingThread;
-  }
-
-  const langInfo =
-    POPULAR_LANGUAGES.find((l) => l.code === targetLanguage) || {
-      name: targetLanguage.toUpperCase(),
-    };
-
-  try {
-    const thread = await channel.threads.create({
-      name: threadTargetName,
-      autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
-      type: ChannelType.PrivateThread,
-      reason: `Private live translation thread for ${user.username}`,
-    });
-
-    await thread.members.add(user.id).catch(() => {});
-
-    dbService.registerLiveThread(
-      user.id,
-      channel.guildId,
-      channel.id,
-      thread.id,
-      targetLanguage
-    );
-
-    const member = await channel.guild.members.fetch(user.id).catch(() => null);
-    const [selectRow, stopRow] = buildLiveThreadControlComponents(
-      channel.guild,
-      member,
-      thread.id,
-      'all'
-    );
-
-    const welcomeEmbed = new EmbedBuilder()
-      .setColor('#8B5CF6')
-      .setTitle('Live Translation Feed')
-      .setDescription(
-        'Incoming messages across server channels will be automatically translated and organized here in real time.'
-      )
-      .addFields(
-        {
-          name: 'Target Language',
-          value: `**${langInfo.name}** (\`${targetLanguage}\`)`,
-          inline: true,
-        },
-        {
-          name: 'Feed Focus',
-          value: '`All Channels (Default)`',
-          inline: true,
-        },
-        {
-          name: 'Feed Controls',
-          value:
-            'Use the dropdown below to focus on a specific channel, or click "Mute #channel" on any message card to silence that channel.',
-          inline: false,
-        }
-      )
-      .setFooter({ text: 'Done by your R4 Rimuru • For feedback feel free to msg me' });
-
-    await thread.send({ embeds: [welcomeEmbed], components: [selectRow, stopRow] });
-    return thread;
-  } catch (err) {
-    console.error('Failed to create private live thread:', err);
-    return null;
-  }
-}
-
-export function buildLiveThreadControlComponents(
-  guild: Guild,
-  member: GuildMember | null,
-  threadId: string,
-  currentFocus = 'all'
-): [ActionRowBuilder<StringSelectMenuBuilder>, ActionRowBuilder<ButtonBuilder>] {
-  const textChannels = guild.channels.cache
-    .filter(
-      (c) =>
-        c.type === ChannelType.GuildText &&
-        (!member || c.permissionsFor(member).has('ViewChannel'))
-    )
-    .first(24);
-
-  const options: StringSelectMenuOptionBuilder[] = [
-    new StringSelectMenuOptionBuilder()
-      .setLabel('All Channels (Unified Feed)')
-      .setValue('focus:all')
-      .setDescription('Show translations from all accessible server channels')
-      .setDefault(currentFocus === 'all'),
-  ];
-
-  for (const c of textChannels) {
-    options.push(
-      new StringSelectMenuOptionBuilder()
-        .setLabel(`# ${c.name}`)
-        .setValue(`focus:${c.id}`)
-        .setDescription(`Focus translations only on #${c.name}`)
-        .setDefault(currentFocus === c.id)
-    );
-  }
-
-  const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
-    new StringSelectMenuBuilder()
-      .setCustomId(`livethread_focus:${threadId}`)
-      .setPlaceholder('Filter feed by channel (Default: All Channels)...')
-      .addOptions(options)
-  );
-
-  const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`livethread_stop:${threadId}`)
-      .setLabel('Stop Feed')
-      .setStyle(ButtonStyle.Danger)
-  );
-
-  return [selectRow, buttonRow];
-}
+export { buildLiveThreadControlComponents, ensureUserGuildThread };
+export const ensureLiveThread = ensureUserGuildThread;
 
 export async function syncUserLiveThreadLanguage(
   guild: Guild,
