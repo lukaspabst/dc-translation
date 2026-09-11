@@ -56,6 +56,7 @@ async function main() {
         'user_channel_reads',
         'buffered_messages',
         'channel_buffered_messages',
+        'thread_focus',
       ];
 
       for (const colName of collections) {
