@@ -1936,8 +1936,6 @@ async function handleDeepLButton(interaction: ButtonInteraction) {
   }
 }
 
-const dmPromptedUsers = new Set<string>();
-
 client.on(Events.GuildCreate, async (guild) => {
   if (!client.isReady()) return;
   if (dbService.isGuildBroadcastDone(guild.id)) return;
@@ -1956,9 +1954,8 @@ client.on(Events.GuildCreate, async (guild) => {
 
 client.on(Events.GuildMemberAdd, async (member) => {
   if (member.user.bot) return;
-  const prefs = dbService.getUserPreferences(member.id);
-  if (!prefs.setup_completed && !dmPromptedUsers.has(member.id)) {
-    dmPromptedUsers.add(member.id);
+  if (dbService.isSetupPromptNeeded(member.id)) {
+    dbService.setSetupStatus(member.id, 'pending');
     const labels = await getDynamicSetupLabels(member.guild.preferredLocale);
     const { embed, components, files } = setupCommand.buildFirstUseIntercept(
       member.user.username,
@@ -1993,9 +1990,8 @@ client.on(Events.MessageCreate, async (message: Message) => {
   if (message.content.startsWith('/') || message.content.startsWith('!')) return;
   if (isPureMediaOrUrl(message.content)) return;
 
-  const authorPrefs = dbService.getUserPreferences(message.author.id);
-  if (!authorPrefs.setup_completed && !dmPromptedUsers.has(message.author.id)) {
-    dmPromptedUsers.add(message.author.id);
+  if (dbService.isSetupPromptNeeded(message.author.id)) {
+    dbService.setSetupStatus(message.author.id, 'pending');
     const serverLocale = message.guild.preferredLocale || 'en';
     const labels = await getDynamicSetupLabels(serverLocale);
     const { embed, components, files } = setupCommand.buildFirstUseIntercept(

@@ -5,6 +5,8 @@ import * as fs from 'fs';
 import { encryptField, decryptField, encryptForUser, decryptForUser, encryptForChannel, decryptForChannel } from '../utils/crypto';
 import { setMongoCacheCollection, CachedTranslationDoc } from '../services/cache';
 
+export type SetupStatus = 'none' | 'pending' | 'completed';
+
 export interface UserPreferences {
   discord_id: string;
   target_language: string;
@@ -15,6 +17,7 @@ export interface UserPreferences {
   auto_translate_thread: boolean;
   preferred_engine: 'google' | 'deepl';
   setup_completed: boolean;
+  setup_status: SetupStatus;
 }
 
 export interface LiveThreadRecord {
@@ -109,6 +112,7 @@ interface EncryptedUserRecord {
   auto_translate_thread?: string;
   preferred_engine: string;
   setup_completed: string;
+  setup_status?: string;
   updated_at: Date;
 }
 
@@ -258,6 +262,10 @@ try {
 
 try {
   sqliteDb.exec('ALTER TABLE users ADD COLUMN setup_completed TEXT');
+} catch {}
+
+try {
+  sqliteDb.exec('ALTER TABLE users ADD COLUMN setup_status TEXT');
 } catch {}
 
 try {
@@ -415,10 +423,15 @@ export async function initDatabase(): Promise<void> {
         const storedUsers = await mongoUsersCol.find({}).toArray();
         for (const u of storedUsers) {
           try {
+            const fallbackStatus = u.setup_status
+              ? u.setup_status
+              : u.setup_completed && decryptField(u.setup_completed) === '1'
+                ? encryptField('completed')
+                : encryptField('none');
             sqliteDb
               .prepare(
-                `INSERT INTO users (discord_id, target_language, show_original, flag_duration, flag_mode, auto_translate_dm, auto_translate_thread, preferred_engine, setup_completed)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `INSERT INTO users (discord_id, target_language, show_original, flag_duration, flag_mode, auto_translate_dm, auto_translate_thread, preferred_engine, setup_completed, setup_status)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                  ON CONFLICT(discord_id) DO UPDATE SET
                    target_language = excluded.target_language,
                    show_original = excluded.show_original,
@@ -427,7 +440,8 @@ export async function initDatabase(): Promise<void> {
                    auto_translate_dm = excluded.auto_translate_dm,
                    auto_translate_thread = excluded.auto_translate_thread,
                    preferred_engine = excluded.preferred_engine,
-                   setup_completed = excluded.setup_completed`
+                   setup_completed = excluded.setup_completed,
+                   setup_status = excluded.setup_status`
               )
               .run(
                 u.discord_id,
@@ -438,7 +452,8 @@ export async function initDatabase(): Promise<void> {
                 u.auto_translate_dm,
                 u.auto_translate_thread,
                 u.preferred_engine,
-                u.setup_completed
+                u.setup_completed,
+                fallbackStatus
               );
           } catch {}
         }
@@ -592,6 +607,16 @@ export const dbService = {
         | undefined;
 
       if (row) {
+        const rawCompleted = decryptField(row.setup_completed);
+        const rawStatus = row.setup_status ? decryptField(row.setup_status) : null;
+        let setupStatus: SetupStatus = 'none';
+        if (rawStatus === 'completed' || rawCompleted === '1') {
+          setupStatus = 'completed';
+        } else if (rawStatus === 'pending') {
+          setupStatus = 'pending';
+        }
+        const isCompleted = setupStatus === 'completed';
+
         const prefs: UserPreferences = {
           discord_id: discordId,
           target_language: decryptField(row.target_language) || 'en',
@@ -601,7 +626,8 @@ export const dbService = {
           auto_translate_dm: decryptField(row.auto_translate_dm) === '1',
           auto_translate_thread: decryptField(row.auto_translate_thread) === '0' ? false : true,
           preferred_engine: decryptField(row.preferred_engine) === 'deepl' ? 'deepl' : 'google',
-          setup_completed: decryptField(row.setup_completed) === '1',
+          setup_completed: isCompleted,
+          setup_status: setupStatus,
         };
         userCache.set(discordId, prefs);
         return prefs;
@@ -620,12 +646,18 @@ export const dbService = {
       auto_translate_thread: true,
       preferred_engine: 'google',
       setup_completed: false,
+      setup_status: 'none',
     };
     userCache.set(discordId, defaultPrefs);
     return defaultPrefs;
   },
 
   async saveUserPreferences(prefs: UserPreferences): Promise<void> {
+    if (prefs.setup_completed) {
+      prefs.setup_status = 'completed';
+    } else if (prefs.setup_status === 'completed') {
+      prefs.setup_completed = true;
+    }
     userCache.set(prefs.discord_id, prefs);
 
     const encLang = encryptField(prefs.target_language);
@@ -636,11 +668,12 @@ export const dbService = {
     const encAutoThread = encryptField(prefs.auto_translate_thread ? '1' : '0');
     const encEngine = encryptField(prefs.preferred_engine);
     const encSetup = encryptField(prefs.setup_completed ? '1' : '0');
+    const encSetupStatus = encryptField(prefs.setup_status);
 
     try {
       sqliteDb.prepare(`
-        INSERT INTO users (discord_id, target_language, show_original, flag_duration, flag_mode, auto_translate_dm, auto_translate_thread, preferred_engine, setup_completed) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) 
+        INSERT INTO users (discord_id, target_language, show_original, flag_duration, flag_mode, auto_translate_dm, auto_translate_thread, preferred_engine, setup_completed, setup_status) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) 
         ON CONFLICT(discord_id) DO UPDATE SET 
           target_language = excluded.target_language,
           show_original = excluded.show_original,
@@ -649,7 +682,8 @@ export const dbService = {
           auto_translate_dm = excluded.auto_translate_dm,
           auto_translate_thread = excluded.auto_translate_thread,
           preferred_engine = excluded.preferred_engine,
-          setup_completed = excluded.setup_completed
+          setup_completed = excluded.setup_completed,
+          setup_status = excluded.setup_status
       `).run(
         prefs.discord_id,
         encLang,
@@ -659,7 +693,8 @@ export const dbService = {
         encAutoDm,
         encAutoThread,
         encEngine,
-        encSetup
+        encSetup,
+        encSetupStatus
       );
     } catch (sqliteErr) {
       console.error('Failed to save to SQLite:', sqliteErr);
@@ -680,6 +715,7 @@ export const dbService = {
               auto_translate_thread: encAutoThread,
               preferred_engine: encEngine,
               setup_completed: encSetup,
+              setup_status: encSetupStatus,
               updated_at: new Date(),
             },
           },
@@ -731,7 +767,20 @@ export const dbService = {
   setSetupCompleted(discordId: string, completed: boolean): void {
     const prefs = this.getUserPreferences(discordId);
     prefs.setup_completed = completed;
+    prefs.setup_status = completed ? 'completed' : (prefs.setup_status === 'pending' ? 'pending' : 'none');
     void this.saveUserPreferences(prefs);
+  },
+
+  setSetupStatus(discordId: string, status: SetupStatus): void {
+    const prefs = this.getUserPreferences(discordId);
+    prefs.setup_status = status;
+    prefs.setup_completed = status === 'completed';
+    void this.saveUserPreferences(prefs);
+  },
+
+  isSetupPromptNeeded(discordId: string): boolean {
+    const prefs = this.getUserPreferences(discordId);
+    return prefs.setup_status === 'none' && !prefs.setup_completed;
   },
 
   getAllAutoTranslateDmUsers(): UserPreferences[] {
@@ -751,6 +800,7 @@ export const dbService = {
             auto_translate_thread: decryptField(row.auto_translate_thread) === '1',
             preferred_engine: decryptField(row.preferred_engine) === 'deepl' ? 'deepl' : 'google',
             setup_completed: decryptField(row.setup_completed) === '1',
+            setup_status: (row.setup_status ? decryptField(row.setup_status) : (decryptField(row.setup_completed) === '1' ? 'completed' : 'none')) as SetupStatus,
           });
         }
       }
@@ -777,6 +827,7 @@ export const dbService = {
             auto_translate_thread: true,
             preferred_engine: decryptField(row.preferred_engine) === 'deepl' ? 'deepl' : 'google',
             setup_completed: decryptField(row.setup_completed) === '1',
+            setup_status: (row.setup_status ? decryptField(row.setup_status) : (decryptField(row.setup_completed) === '1' ? 'completed' : 'none')) as SetupStatus,
           });
         }
       }

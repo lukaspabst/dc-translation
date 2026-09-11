@@ -83,8 +83,7 @@ export async function runServerSetupBroadcast(
         continue;
       }
 
-      const prefs = dbService.getUserPreferences(member.id);
-      if (prefs.setup_completed) {
+      if (!dbService.isSetupPromptNeeded(member.id)) {
         stats.alreadySetup++;
         continue;
       }
@@ -103,6 +102,7 @@ export async function runServerSetupBroadcast(
           );
 
           await member.send({ embeds: [embed], components, files });
+          dbService.setSetupStatus(member.id, 'pending');
           stats.delivered++;
           deliveredThisUser = true;
         } catch (err: unknown) {
@@ -111,6 +111,7 @@ export async function runServerSetupBroadcast(
           const status = errorObj.status;
 
           if (code === 50007) {
+            dbService.setSetupStatus(member.id, 'pending');
             stats.closedDms++;
             break;
           } else if (code === 50001) {
