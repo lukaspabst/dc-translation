@@ -117,17 +117,18 @@ class EnhancedTranslationCache {
   ): Promise<string> {
     const key = this.generateKey(text, targetLanguage, engine);
 
-    const cached = await this.get(text, targetLanguage, engine);
-    if (cached) {
+    const l1Hit = this.getL1(key);
+    if (l1Hit !== null) {
       console.log(
         JSON.stringify({
           event: 'translation_cache_hit',
+          level: 'L1',
           engine,
           chars_saved: text.length,
           target: targetLanguage,
         })
       );
-      return cached;
+      return l1Hit;
     }
 
     const existingPromise = this.inFlight.get(key);
@@ -135,8 +136,30 @@ class EnhancedTranslationCache {
       return existingPromise;
     }
 
-    const translationPromise = (async () => {
+    const masterPromise = (async () => {
       try {
+        if (mongoCacheCol) {
+          try {
+            const doc = await mongoCacheCol.findOne({ key });
+            if (doc && doc.translated_text) {
+              const decrypted = decryptField(doc.translated_text);
+              this.setL1(key, decrypted);
+              console.log(
+                JSON.stringify({
+                  event: 'translation_cache_hit',
+                  level: 'L2_mongo',
+                  engine,
+                  chars_saved: text.length,
+                  target: targetLanguage,
+                })
+              );
+              return decrypted;
+            }
+          } catch (err) {
+            console.warn('MongoDB Atlas cache lookup warning:', err);
+          }
+        }
+
         const result = await translateFn();
         await this.set(text, targetLanguage, engine, result);
         return result;
@@ -145,8 +168,8 @@ class EnhancedTranslationCache {
       }
     })();
 
-    this.inFlight.set(key, translationPromise);
-    return translationPromise;
+    this.inFlight.set(key, masterPromise);
+    return masterPromise;
   }
 
   public clear(): void {

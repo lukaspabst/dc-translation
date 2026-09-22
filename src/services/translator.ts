@@ -2,6 +2,8 @@ import translate from 'google-translate-api-x';
 import * as deepl from 'deepl-node';
 import { translationCache } from './cache';
 import { getUILabels, UILabels } from '../utils/locales';
+import { isUntranslatable } from '../utils/text';
+import { isSameLanguage } from './languageDetector';
 
 let deeplTranslator: deepl.Translator | null = null;
 let googleApiKey: string | undefined;
@@ -32,6 +34,28 @@ export function initGoogleApi(apiKey: string | undefined): void {
 
 export const translationService = {
   async translateWithGoogle(text: string, targetLanguage: string): Promise<string> {
+    if (isUntranslatable(text)) {
+      console.log(
+        JSON.stringify({
+          event: 'translation_skip_untranslatable',
+          engine: 'google',
+          char_count: text.length,
+          target: targetLanguage,
+        })
+      );
+      return text;
+    }
+    if (isSameLanguage(text, targetLanguage)) {
+      console.log(
+        JSON.stringify({
+          event: 'translation_skip_same_language',
+          engine: 'google',
+          char_count: text.length,
+          target: targetLanguage,
+        })
+      );
+      return text;
+    }
     return translationCache.getOrTranslate(text, targetLanguage, 'google', async () => {
       console.log(
         JSON.stringify({
@@ -88,6 +112,28 @@ export const translationService = {
   },
 
   async translateWithDeepL(text: string, targetLanguage: string): Promise<string> {
+    if (isUntranslatable(text)) {
+      console.log(
+        JSON.stringify({
+          event: 'translation_skip_untranslatable',
+          engine: 'deepl',
+          char_count: text.length,
+          target: targetLanguage,
+        })
+      );
+      return text;
+    }
+    if (isSameLanguage(text, targetLanguage)) {
+      console.log(
+        JSON.stringify({
+          event: 'translation_skip_same_language',
+          engine: 'deepl',
+          char_count: text.length,
+          target: targetLanguage,
+        })
+      );
+      return text;
+    }
     return translationCache.getOrTranslate(text, targetLanguage, 'deepl', async () => {
       console.log(
         JSON.stringify({
