@@ -74,7 +74,7 @@ import {
   getDynamicServerLabels,
   getDynamicUILabels,
 } from './services/uiTranslator';
-import { isPureMediaOrUrl } from './utils/text';
+import { isPureMediaOrUrl, isBotCommand, isUntranslatable } from './utils/text';
 
 dotenv.config();
 
@@ -1970,7 +1970,7 @@ client.on(Events.GuildMemberAdd, async (member) => {
 });
 
 client.on(Events.MessageCreate, async (message: Message) => {
-  if (message.author.bot || message.system || !message.guild) return;
+  if (message.author.bot || message.system || message.webhookId || !message.guild) return;
 
   if (message.channel.isThread()) {
     const threadChannel = message.channel as ThreadChannel;
@@ -1990,7 +1990,8 @@ client.on(Events.MessageCreate, async (message: Message) => {
 
   if (message.stickers && message.stickers.size > 0 && (!message.content || isPureMediaOrUrl(message.content))) return;
   if (!message.content || message.content.trim().length < 2) return;
-  if (message.content.startsWith('/') || message.content.startsWith('!')) return;
+  if (isBotCommand(message.content)) return;
+  if (isUntranslatable(message.content)) return;
   if (isPureMediaOrUrl(message.content)) return;
 
   if (dbService.isSetupPromptNeeded(message.author.id)) {

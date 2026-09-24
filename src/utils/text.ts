@@ -43,8 +43,29 @@ export function isRepetitiveNoise(content: string): boolean {
   return new Set(letters).size <= 2;
 }
 
+export function isBotCommand(content: string): boolean {
+  if (!content) return false;
+  const trimmed = content.trim();
+  if (trimmed.length === 0) return false;
+
+  if (/^(owo|uwu)\b/i.test(trimmed)) return true;
+  if (/^w\s+(hunt|battle|daily|pray|curse|cf|slots|flip|coinflip|sell|equip|inv|zoo|my|top|level|rank|points|cash|cookie|hug|kiss|bully|slap|pat|cuddle|poke)\b/i.test(trimmed)) return true;
+  if (/^pls\s+/i.test(trimmed)) return true;
+  if (/^[!/$~]\S*/.test(trimmed)) return true;
+  if (/^\?[a-zA-Z]/.test(trimmed)) return true;
+  if (/^\.[a-zA-Z]/.test(trimmed)) return true;
+  if (/^,[a-zA-Z]/.test(trimmed)) return true;
+  if (/^;+\S+/.test(trimmed)) return true;
+  if (/^-[a-zA-Z]/.test(trimmed)) return true;
+  if (/^\+[a-zA-Z]/.test(trimmed)) return true;
+  if (/^[a-zA-Z]!\S*/.test(trimmed)) return true;
+
+  return false;
+}
+
 export function isUntranslatable(content: string): boolean {
   if (!content || !content.trim()) return true;
+  if (isBotCommand(content)) return true;
   if (isPureMediaOrUrl(content)) return true;
   if (!hasLinguisticContent(content)) return true;
   if (isAsciiEmoticon(content)) return true;
