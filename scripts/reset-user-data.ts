@@ -53,22 +53,28 @@ async function main() {
 
       const collections = [
         'users',
+        'guild_settings',
         'live_threads',
         'user_muted_channels',
         'user_channel_reads',
         'buffered_messages',
         'channel_buffered_messages',
         'thread_focus',
+        'translation_cache',
+        'ui_bundles',
       ];
 
       for (const colName of collections) {
         try {
           const res = await mongoDb.collection(colName).deleteMany({});
           console.log(`MongoDB collection '${colName}' cleared: ${res.deletedCount} documents removed.`);
+          await mongoDb.collection(colName).drop().catch(() => {});
         } catch (colErr) {
           console.warn(`Could not clear collection '${colName}':`, colErr);
         }
       }
+      await mongoDb.dropDatabase().catch(() => {});
+      console.log(`MongoDB database '${mongoDb.databaseName}' dropped.`);
     } finally {
       await mongoClient.close();
       if (tempCertPath && fs.existsSync(tempCertPath)) {
