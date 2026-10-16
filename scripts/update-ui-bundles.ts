@@ -5,6 +5,7 @@ import { MongoClient, MongoClientOptions } from 'mongodb';
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 
 async function updateUiBundles() {
   console.log('=== PURGING STALE UI BUNDLES IN MONGODB & SQLITE ===');
@@ -16,14 +17,15 @@ async function updateUiBundles() {
       retryWrites: true,
     };
 
+    let tempCertPath: string | null = null;
     if (process.env.MONGODB_CERT_PEM && process.env.MONGODB_CERT_PEM.trim() !== '') {
       const raw = process.env.MONGODB_CERT_PEM.trim();
       const content = raw.includes('BEGIN CERTIFICATE')
         ? raw
         : Buffer.from(raw, 'base64').toString('utf8');
-      const certPath = path.resolve(__dirname, 'temp-mongo-cert.pem');
-      fs.writeFileSync(certPath, content, { mode: 0o600 });
-      options.tlsCertificateKeyFile = certPath;
+      tempCertPath = path.join(os.tmpdir(), `mongodb-cert-bundles-${process.pid}.pem`);
+      fs.writeFileSync(tempCertPath, content, { mode: 0o600 });
+      options.tlsCertificateKeyFile = tempCertPath;
     } else if (process.env.MONGODB_CERT_PATH && fs.existsSync(process.env.MONGODB_CERT_PATH)) {
       options.tlsCertificateKeyFile = path.resolve(process.env.MONGODB_CERT_PATH);
     }
@@ -39,8 +41,7 @@ async function updateUiBundles() {
       console.error('MongoDB error:', err);
     } finally {
       await client.close();
-      const certPath = path.resolve(__dirname, 'temp-mongo-cert.pem');
-      if (fs.existsSync(certPath)) fs.unlinkSync(certPath);
+      if (tempCertPath && fs.existsSync(tempCertPath)) fs.unlinkSync(tempCertPath);
     }
   }
 

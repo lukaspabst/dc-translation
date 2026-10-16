@@ -1,18 +1,32 @@
 {
   "name": "dc-translation",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "High-performance multilingual Discord translation bot with private live threads, AES-256-GCM field encryption, and multi-tier caching.",
+  "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "deploy": "tsx src/deploy-commands.ts",
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx scripts/verify-all.ts",
     "start": "node dist/index.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "discord",
+    "discord-bot",
+    "translation",
+    "google-translate",
+    "deepl",
+    "typescript",
+    "sqlite",
+    "mongodb"
+  ],
+  "author": "Rimuru",
+  "license": "MIT",
   "type": "commonjs",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "dependencies": {
     "better-sqlite3": "^12.9.0",
     "deepl-node": "^1.27.0",
@@ -29,5 +43,8 @@
     "@types/node": "^25.6.0",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"
+  },
+  "overrides": {
+    "esbuild": "^0.28.2"
   }
 }

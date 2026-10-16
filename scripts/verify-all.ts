@@ -1,11 +1,9 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import { MongoClient, MongoClientOptions } from 'mongodb';
-import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
-import { encryptField, decryptField } from '../src/utils/crypto';
+import { encryptField, decryptField, encryptForUser, decryptForUser } from '../src/utils/crypto';
 import { initDatabase, dbService } from '../src/db/database';
 import {
   getSetupLabels,
@@ -40,11 +38,20 @@ async function runSecurityTests() {
   const decrypted = decryptField(encrypted);
   assert(decrypted === testPlaintext, 'AES-256-GCM decrypts correctly back to original plaintext');
 
+  const userAEncrypted = encryptForUser(testPlaintext, 'user_111');
+  const userBDecrypted = decryptForUser(userAEncrypted, 'user_222');
+  assert(userBDecrypted !== testPlaintext, 'Per-user HMAC-derived AES-256-GCM key isolates ciphertexts across users');
+  assert(decryptForUser(userAEncrypted, 'user_111') === testPlaintext, 'Per-user AES-256-GCM key decrypts for owning user');
+
   const gitignorePath = path.resolve(__dirname, '../.gitignore');
   const gitignoreContent = fs.readFileSync(gitignorePath, 'utf8');
   assert(gitignoreContent.includes('.env'), '.gitignore ignores .env files');
-  assert(gitignoreContent.includes('*.pem') || gitignoreContent.includes('certs/'), '.gitignore ignores certificate files');
+  assert(gitignoreContent.includes('*.pem') && gitignoreContent.includes('certs/'), '.gitignore ignores certificate files');
   assert(gitignoreContent.includes('data.db*'), '.gitignore ignores SQLite databases');
+
+  const dockerignorePath = path.resolve(__dirname, '../.dockerignore');
+  const dockerignoreContent = fs.readFileSync(dockerignorePath, 'utf8');
+  assert(dockerignoreContent.includes('.env') && dockerignoreContent.includes('certs/'), '.dockerignore excludes secrets and certificates from Docker context');
 
   const srcDir = path.resolve(__dirname, '../src');
   const walk = (dir: string): string[] => {
@@ -61,7 +68,7 @@ async function runSecurityTests() {
   for (const file of walk(srcDir)) {
     const code = fs.readFileSync(file, 'utf8');
     if (code.includes('mongodb+srv://') && !code.includes('process.env')) hasRawSecret = true;
-    if (code.includes('ghp_') || code.includes('AIzaSy')) hasRawSecret = true;
+    if (code.includes('ghp_') || code.includes('AIzaSy') || code.includes('sk_live_')) hasRawSecret = true;
   }
   assert(!hasRawSecret, 'Zero raw hardcoded secrets or API keys found in src/ codebase');
 }
@@ -106,17 +113,28 @@ async function runFunctionalityTests() {
 async function runDocuTests() {
   console.log('\n--- 3. DOCUMENTATION & GOVERNANCE TESTS ---');
 
-  const walkthroughPath = path.resolve(
-    'C:/Users/Lukas/.gemini/antigravity/brain/d182ca77-34e5-454d-bfb4-8540b08010bf/walkthrough.md'
-  );
-  assert(fs.existsSync(walkthroughPath), 'Walkthrough artifact exists');
+  const rootDir = path.resolve(__dirname, '..');
+  const readmePath = path.join(rootDir, 'README.md');
+  const securityPath = path.join(rootDir, 'SECURITY.md');
+  const licensePath = path.join(rootDir, 'LICENSE');
+  const envExamplePath = path.join(rootDir, '.env.example');
 
-  if (fs.existsSync(walkthroughPath)) {
-    const content = fs.readFileSync(walkthroughPath, 'utf8');
-    assert(content.includes('Persistent Setup Status'), 'Walkthrough documents Section 10 Persistent Setup Status');
-    assert(content.includes('Muted Channel Management'), 'Walkthrough documents Muted Channel Management');
-    assert(content.includes('Step 2 Copywriting'), 'Walkthrough documents Step 2 Copywriting');
-  }
+  assert(fs.existsSync(readmePath), 'README.md exists');
+  assert(fs.existsSync(securityPath), 'SECURITY.md exists');
+  assert(fs.existsSync(licensePath), 'LICENSE exists');
+  assert(fs.existsSync(envExamplePath), '.env.example exists');
+
+  const readmeContent = fs.readFileSync(readmePath, 'utf8');
+  assert(!readmeContent.toLowerCase().includes('file:///c:/users/'), 'README.md contains zero local machine file:// paths');
+  assert(readmeContent.includes('DISCORD_CLIENT_ID'), 'README.md documents DISCORD_CLIENT_ID');
+
+  const envExampleContent = fs.readFileSync(envExamplePath, 'utf8');
+  assert(envExampleContent.includes('DISCORD_CLIENT_ID='), '.env.example defines DISCORD_CLIENT_ID');
+  assert(envExampleContent.includes('ENCRYPTION_SECRET_KEY='), '.env.example defines ENCRYPTION_SECRET_KEY');
+
+  const workflowPath = path.join(rootDir, '.github/workflows/deploy.yml');
+  const workflowContent = fs.readFileSync(workflowPath, 'utf8');
+  assert(!workflowContent.includes('498811') && !workflowContent.includes('journeylink'), 'CI/CD workflow contains zero internal GCP project identifiers');
 
   const srcDir = path.resolve(__dirname, '../src');
   const walk = (dir: string): string[] => {

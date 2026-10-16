@@ -2185,9 +2185,32 @@ client.on(Events.MessageCreate, async (message: Message) => {
 });
 
 const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 8080;
-const server = http.createServer((_req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('Discord Translation Bot is running.\n');
+const server = http.createServer((req, res) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Cache-Control', 'no-store');
+
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.writeHead(405, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'error', message: 'Method Not Allowed' }));
+    return;
+  }
+
+  if (req.url === '/' || req.url === '/health' || req.url === '/healthz') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(
+      JSON.stringify({
+        status: 'ok',
+        service: 'dc-translation',
+        ready: client.isReady(),
+        uptime: Math.floor(process.uptime()),
+      })
+    );
+    return;
+  }
+
+  res.writeHead(404, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ status: 'error', message: 'Not Found' }));
 });
 server.listen(port, () => {
   console.log(`Healthcheck server listening on port ${port}`);

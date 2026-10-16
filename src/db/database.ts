@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { MongoClient, Db, Collection, MongoClientOptions } from 'mongodb';
 import path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
 import { encryptField, decryptField, encryptForUser, decryptForUser, encryptForChannel, decryptForChannel } from '../utils/crypto';
 import { setMongoCacheCollection, CachedTranslationDoc } from '../services/cache';
 
@@ -337,8 +338,13 @@ export async function initDatabase(): Promise<void> {
         const content = raw.includes('BEGIN CERTIFICATE')
           ? raw
           : Buffer.from(raw, 'base64').toString('utf8');
-        const certPath = path.resolve('/tmp/mongodb-cert.pem');
+        const certPath = path.join(os.tmpdir(), `mongodb-cert-${process.pid}.pem`);
         fs.writeFileSync(certPath, content, { mode: 0o600 });
+        process.once('exit', () => {
+          try {
+            if (fs.existsSync(certPath)) fs.unlinkSync(certPath);
+          } catch {}
+        });
         options.tlsCertificateKeyFile = certPath;
       } else if (process.env.MONGODB_CERT_PATH && fs.existsSync(process.env.MONGODB_CERT_PATH)) {
         options.tlsCertificateKeyFile = path.resolve(process.env.MONGODB_CERT_PATH);

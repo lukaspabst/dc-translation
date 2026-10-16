@@ -1,10 +1,10 @@
-version: '3.8'
-
 services:
   redis:
     image: redis:7-alpine
     container_name: dc-translation-redis
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     command: sh -c 'exec redis-server --requirepass "$${REDIS_PASSWORD}" --appendonly yes'
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
@@ -21,13 +21,18 @@ services:
     build: .
     container_name: dc-translation-bot
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       - redis
     env_file:
       - .env
     environment:
+      - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
       - REDIS_PASSWORD=${REDIS_PASSWORD}
+    ports:
+      - "127.0.0.1:${PORT:-8080}:8080"
     volumes:
       - ./data.db:/app/data.db
       - ./data.db-wal:/app/data.db-wal

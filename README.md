@@ -1,212 +1,174 @@
-# 🌐 Discord Translation Bot (`dc-translation`)
+# Discord Translation Bot (`dc-translation`)
 
-> High-performance, quota-preserving multilingual translation bot for Discord servers, powered by official **Google Cloud Translation API** (500k free characters/month), **DeepL**, and native Discord UI components.
+[![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-20%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Discord.js](https://img.shields.io/badge/discord.js-v14-5865F2?logo=discord&logoColor=white)](https://discord.js.org/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](Dockerfile)
+[![License: MIT](https://img.shields.io/badge/License-MIT-8B5CF6.svg)](LICENSE)
+
+High-performance, quota-preserving multilingual translation bot for Discord communities, powered by **Google Cloud Translation API**, **DeepL**, and native Discord UI components.
 
 ---
 
-## ✨ Why This Bot is Built Differently (User Experience First)
+## Key Capabilities
 
-Most Discord translation bots are clunky: they clutter channels with unwanted replies, force users to memorize obscure language codes, or burn through expensive API quotas in days. 
-
-This bot completely re-engineers translation for active Discord communities:
-
-| Traditional Bot Friction | How This Bot Solves It |
+| Problem with Legacy Bots | `dc-translation` Architecture |
 | :--- | :--- |
-| **Public Chat Spam:** Reacting with a flag drops a permanent embed in the channel for everyone. | **100% Private Context Menu App:** Right-click any message $\rightarrow$ **Apps $\rightarrow$ Translate** produces an ephemeral card visible *only* to you. |
-| **Channel Clutter on Flags:** Reactions clutter the feed. | **1-Click 🗑️ Dismiss Button** on every translation embed, plus a user preference to receive translations via **Direct Message (DM)**. |
-| **Manual Friction & Blind Typing:** Typing `/setlanguage de` without hints or autocomplete. | **Smart Discord Autocomplete:** Type `/setlanguage` or `/translate to:` and see instant suggestions (`🇩🇪 German (de)`). |
-| **Rigid Settings:** Running 3 separate commands to change settings. | **Interactive `/settings` Dashboard:** Configure your language, auto-delete timing, delivery mode, and engine directly with Discord Select Menus and buttons. |
-| **In-Card Language Switching:** If you want a different language, you had to re-run commands. | **Live Dropdown:** Switch target languages on the fly directly inside the translation card. |
-| **Cost & Quotas:** Free DeepL quotas burn out in weeks on a 200-member server. | **Google Cloud Workhorse + On-Demand DeepL:** Unlimited free translations by default, with an on-demand `✨ Enhance with DeepL` button that preserves character quotas. |
+| **Public Channel Spam:** Flag reactions post permanent replies visible to everyone. | **Private Context Menu & Ephemeral Cards:** Right-click any message › **Apps › Translate** for a private card visible only to you, with live language switching. |
+| **Disconnected Translation Feeds:** Users miss conversations across multiple channels. | **Unified Private Live Thread:** Streams real-time batched translations into a personal split-screen thread with per-channel focus filtering, unread catch-up, and channel muting. |
+| **Unprotected Database Storage:** User settings and cached messages stored in plaintext. | **AES-256-GCM Field Encryption:** User preferences, guild guardrails, and buffered messages are encrypted at rest with per-user and per-channel HMAC-derived keys. |
+| **Runaway API Quotas:** Bot commands, emojis, links, and same-language messages burn API credits. | **Pre-Flight Filtering & Coalesced Multi-Tier Cache:** Local n-gram language detection, noise/command filtering, L1 in-memory LRU cache, and L2 MongoDB Atlas TTL cache. |
+| **Manual Setup Friction:** Users must memorize ISO language codes and slash commands. | **Zero-Friction Onboarding:** Auto-detects the user's Discord client locale with a 1-click setup wizard across 135+ languages. |
 
 ---
 
-## 🚀 How to Use
+## System Architecture
 
-### 1. The Recommended Way: Instant Private Translation
-1. **Right-click** any message (or tap & hold on mobile).
-2. Select **Apps** $\rightarrow$ **Translate**.
-3. *Done!* You receive a private ephemeral response with:
-   - Your translation in your preferred language.
-   - An interactive dropdown to **switch to any other language on the fly**.
-   - A `✨ Enhance with DeepL` button.
-   - A `📢 Share to Channel` button (if you want everyone to see it).
-   - A `🗑️ Dismiss` button to remove the card when you are done.
-
-### 2. Country Flag Reactions
-- Simply react to any message with a country flag (e.g. 🇩🇪, 🇬🇧, 🇫🇷, 🇪🇸, 🇯🇵, 🇮🇹, 🇺🇦).
-- The bot translates the message into that language.
-- Includes a **🗑️ Dismiss** button for 1-click cleanup.
-- *Tip:* Switch your delivery mode to **DM** in `/settings` if you never want flag translations to post in public channels!
-
-### 3. 🧵 Private Real-Time Live Thread (`/livethread`)
-Want continuous, hands-free translations in a channel without getting DMs or cluttering the chat for others?
-- Run `/livethread start [language:optional]` in any channel (e.g. `#general`).
-- The bot creates a **Discord Private Thread** (`🌐 zeN's Translations`) visible **ONLY to you and the bot**.
-- On desktop, this thread docks on the right side of your screen as a **split-view panel**.
-- As members chat in other languages on the left, the bot automatically translates and streams their messages into your private thread on the right in real time!
-- Run `/livethread stop` anytime to archive and close the thread.
-
-### 4. Direct Translation Command
-Translate arbitrary text or draft a message in another language before sending:
+```mermaid
+flowchart TD
+    Discord["Discord Gateway (Messages, Reactions, Interactions)"] --> Filter["Pre-Flight Filter & Local Language Detector"]
+    Filter -->|Translatable Text| Router["Delivery & Permission Router"]
+    Router --> Batcher["3.5s Message Batcher (Live Threads)"]
+    Router --> Direct["On-Demand & Auto-DM Handler"]
+    Batcher --> Cache["Coalesced L1 Memory + L2 MongoDB Cache"]
+    Direct --> Cache
+    Cache -->|Cache Miss| Engine["Translation Engine (Google Cloud v2 / DeepL)"]
+    Engine --> Crypto["AES-256-GCM & HMAC-SHA256 Key Derivation"]
+    Crypto --> Storage[("SQLite WAL + MongoDB Atlas")]
 ```
-/translate text:"Guten Morgen zusammen!" to:English
-```
-- Supports real-time autocomplete across 135+ languages.
-- Optional `share: True` parameter to post the result publicly.
 
-### 5. Interactive Control Panel (`/settings`)
-Run `/settings` to open your interactive preferences panel:
-- **Target Language:** Select from the top 25 languages.
-- **Show Original Text:** Toggle whether the original message is quoted in the translation embed.
-- **Flag Auto-Delete:** Choose auto-delete timing (`Permanent`, `1m`, `3m`, `5m`, `15m`, `60m`).
-- **Delivery Mode:** Switch between `Channel Reply` and `Direct Message (DM)`.
-- **Default Engine:** Switch between `Google Cloud` and `DeepL`.
+### Core Engineering Highlights
+- **Algorithmic Pre-Filtering ([`src/utils/text.ts`](src/utils/text.ts) & [`src/services/languageDetector.ts`](src/services/languageDetector.ts)):** Strips Discord markup, custom emojis, stickers, media URLs, ASCII emoticons, repetitive noise, and common bot commands before invoking external APIs.
+- **Stampede-Proof Translation Cache ([`src/services/cache.ts`](src/services/cache.ts)):** Deduplicates concurrent in-flight requests for identical `(text, targetLanguage, engine)` tuples and persists encrypted translations in MongoDB Atlas with a 14-day TTL.
+- **3.5-Second Smart Message Batching ([`src/services/messageBatcher.ts`](src/services/messageBatcher.ts)):** Coalesces rapid channel messages into clean transcript cards inside private live threads to prevent Discord rate limits.
+- **Dynamic UI Localization ([`src/services/uiTranslator.ts`](src/services/uiTranslator.ts) & [`src/utils/locales.ts`](src/utils/locales.ts)):** Pre-bundled native UI dictionaries (`en`, `de`, `es`, `fr`, `it`, `ru`, `uk`) plus automatic on-demand translation and caching of bot UI interfaces for 135+ languages.
 
 ---
 
-## 🛠️ Setup & Installation Guide
+## User Workflows
+
+### 1. Private Live Translation Thread (Recommended)
+- Automatically creates a private Discord thread (`Translations › username`) visible only to the user.
+- Docks alongside the main channel in Discord's desktop split-view.
+- Includes an interactive control panel at the top of the thread to:
+  - **Filter Feed Focus:** Stream `All Channels` or focus on a specific `#channel` with automatic unread catch-up and `Load More` pagination.
+  - **Mute / Unmute Channels:** Silence high-traffic channels with 1 click.
+
+### 2. Instant Context Menu Translation
+- Right-click any message (or long-press on mobile) › **Apps** › **Translate**.
+- Returns a private ephemeral card with:
+  - Live dropdown to switch target languages on the fly.
+  - **DeepL** quality enhancement button.
+  - **Live Thread** launcher and **Share to Channel** action.
+
+### 3. Country Flag Reactions
+- React to any message with a country or regional flag (e.g., `🇩🇪`, `🇬🇧`, `🇫🇷`, `🇪🇸`, `🇯🇵`, `🇺🇦`, `🏴󠁧󠁢󠁥󠁮󠁧󠁿`).
+- Automatically translates into the corresponding language and cleans up after the user's configured auto-delete duration (default: 3 minutes).
+
+### 4. Interactive Onboarding & Preferences (`/setup` & `/settings`)
+- Auto-detects the user's Discord client language on first interaction.
+- Configure target language (with modal search across 135+ languages), delivery mode (`Live Thread`, `DM Feed`, or `On-Demand`), original quote display, auto-delete timer, and preferred engine (`Google Cloud` or `DeepL`).
+
+---
+
+## Commands Reference
+
+| Command | Type | Access | Description |
+| :--- | :--- | :--- | :--- |
+| `/setup` | Slash Command | Everyone | Interactive 3-step onboarding wizard with automatic Discord locale detection |
+| `/settings` | Slash Command | Everyone | Personal control panel for language, delivery mode, auto-delete, and engine |
+| `Translate` | Message Context Menu | Everyone | Private ephemeral translation card with live language switcher |
+| `Translate (Permanent)` | Message Context Menu | Configurable | Posts a public translation card in the channel (governed by `/server-settings`) |
+| `/translate` | Slash Command | Everyone | Translate arbitrary text across 135+ languages with autocomplete |
+| `/livethread start` | Slash Command | Configurable | Start or reopen your private real-time translation thread |
+| `/livethread stop` | Slash Command | Everyone | Stop and archive your active live translation thread |
+| `/livethread unmute` | Slash Command | Everyone | Unmute previously silenced channels in your live thread |
+| `/setlanguage` | Slash Command | Everyone | Quickly update your default target language with autocomplete |
+| `/setoriginal` | Slash Command | Everyone | Toggle original message quote visibility in translation cards |
+| `/setduration` | Slash Command | Everyone | Set auto-delete timer (in minutes) for flag reaction replies |
+| `/help` | Slash Command | Everyone | Display the localized interactive user guide |
+| `/server-settings` | Slash Command | Manage Server | Configure server-wide anti-flood guardrails for threads, public cards, and flags |
+| `/broadcast-setup` | Slash Command | Administrator | Paced DM onboarding dispatch for existing server members |
+
+---
+
+## Getting Started
 
 ### 1. Prerequisites
-- **Node.js 20+** or **Docker**
-- A **Discord Application & Bot Token** from the [Discord Developer Portal](https://discord.com/developers/applications)
-- *(Optional but Recommended)* **Google Cloud Translation API Key** (500,000 characters free every month)
-- *(Optional)* **DeepL API Key** (for on-demand enhancement)
+- **Node.js 20+** (or **Docker** with Docker Compose)
+- **Discord Application & Bot Token** from the [Discord Developer Portal](https://discord.com/developers/applications)
+- *(Recommended)* **Google Cloud Translation API Key**
+- *(Optional)* **DeepL API Key** and **MongoDB Atlas URI**
 
----
+### 2. Discord Bot Configuration
+1. Open the [Discord Developer Portal](https://discord.com/developers/applications) and select your application.
+2. Under **Bot › Privileged Gateway Intents**, enable:
+   - `Message Content Intent`
+   - `Server Members Intent`
+3. Under **OAuth2 › URL Generator**, select scopes `bot` and `applications.commands` with permissions:
+   - `View Channels`, `Send Messages`, `Send Messages in Threads`, `Create Private Threads`, `Manage Threads`, `Read Message History`, `Embed Links`, `Attach Files`, `Add Reactions`, `Manage Messages`.
 
-### 2. Discord Developer Portal Configuration
+### 3. Environment Configuration
+Copy [`.env.example`](.env.example) to `.env` and populate your credentials:
 
-1. Go to [discord.com/developers/applications](https://discord.com/developers/applications) and create or select your application.
-2. Under **Bot** $\rightarrow$ **Privileged Gateway Intents**, enable:
-   - ✅ **Message Content Intent** (Required to read message text for translation)
-   - ✅ **Server Members Intent**
-3. Under **OAuth2** $\rightarrow$ **URL Generator**, select:
-   - **Scopes:** `bot`, `applications.commands`
-   - **Bot Permissions:**
-     - `Send Messages`
-     - `Read Message History`
-     - `Embed Links`
-     - `Add Reactions`
-     - `Manage Messages` (Optional: allows the bot to remove user reaction flags to keep messages clean)
-4. Copy the generated URL and invite the bot to your server.
-
----
-
-### 3. Environment Variables (`.env`)
-
-Create a `.env` file in the project root based on `.env.example`:
-
-```env
-# Discord Credentials
-DISCORD_TOKEN=your_bot_token_here
-DISCORD_CLIENT_ID=your_application_client_id_here
-
-# Google Cloud Translation API (500,000 free chars/month)
-GOOGLE_TRANSLATE_API_KEY=AIzaSy...
-GCP_PROJECT_ID=your_gcp_project_id
-
-# DeepL API Key (Optional, for on-demand enhancement button)
-DEEPL_AUTH_KEY=your_deepl_api_key_here
+```bash
+cp .env.example .env
 ```
 
----
+```env
+# Discord Application Credentials
+DISCORD_TOKEN=your_discord_bot_token
+DISCORD_CLIENT_ID=your_discord_application_client_id
 
-### 4. Deploy Commands & Run
+# Translation Engine Keys
+GOOGLE_TRANSLATE_API_KEY=your_google_cloud_translate_api_key
+DEEPL_AUTH_KEY=your_deepl_api_key
 
-#### Local Development:
+# AES-256-GCM Master Encryption Secret (Generate with: openssl rand -hex 32)
+ENCRYPTION_SECRET_KEY=your_64_char_hex_encryption_secret
+
+# Optional MongoDB Atlas Storage (L2 Cache & Encrypted Persistence)
+MONGODB_URI=mongodb+srv://<user>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority
+MONGODB_DB_NAME=dc_translation
+
+# Healthcheck Server Port
+PORT=8080
+```
+
+### 4. Local Development & Verification
 ```bash
 # Install dependencies
-npm install
+npm ci
 
-# Deploy slash commands and context menu apps to Discord
+# Register slash & context menu commands with Discord
 npm run deploy
 
-# Build TypeScript
-npm run build
+# Run typecheck and automated verification suite (security, crypto, lifecycle, locales, flags)
+npm run typecheck
+npm test
 
-# Start bot
+# Build and start production bundle
+npm run build
 npm start
 ```
 
-#### Docker Deployment:
+### 5. Docker Deployment
 ```bash
 docker compose up -d --build
 ```
+The container runs as an unprivileged `node` user and exposes a healthcheck endpoint at `http://127.0.0.1:8080/health`.
 
 ---
 
-## 🏗️ Technical Architecture & Optimizations
+## Security & Privacy
 
-- **Single-Request Pipeline:** Eliminated the legacy 6-call scraping bottleneck. Static UI strings are served instantly via [`src/utils/locales.ts`](file:///c:/Users/Lukas/IdeaProjects/dc-translation/src/utils/locales.ts).
-- **In-Memory LRU Cache:** [`src/services/cache.ts`](file:///c:/Users/Lukas/IdeaProjects/dc-translation/src/services/cache.ts) stores `hash(text + lang + engine)` to serve duplicate reactions and common phrases in 0ms with zero API usage.
-- **Graceful Quota Handling:** If DeepL or GCP quotas are reached, the bot intercepts errors and falls back seamlessly without crashing.
-- **Type-Safe SQLite Persistence:** Stored locally in `data.db` using `better-sqlite3` with WAL journal mode.
-
----
-
-## 📜 Commands Reference
-
-| Command | Type | Description |
-| :--- | :--- | :--- |
-| `/setup` | Slash Command | 3-step interactive onboarding wizard (Language, Delivery, Preferences) |
-| `/server-settings` | Slash Command | **Staff Only:** Server anti-flood guardrails (lock threads, disable public spam) |
-| `Translate` | Message Context Menu | 100% private ephemeral translation with live language picker & auto-detected client language |
-| `Translate (Permanent)` | Message Context Menu | Public channel translation (Staff only by default to prevent chat spam) |
-| `/settings` | Slash Command | Interactive personal control panel (Select menus & toggles) |
-| `/livethread` | Slash Command | Manage private split-screen translation threads (Subject to staff policy) |
-| `/translate` | Slash Command | Quick text translation across 135+ languages with autocomplete |
-| `/setlanguage` | Slash Command | Quick language update with 135+ language autocomplete |
-| `/setoriginal` | Slash Command | Toggle original text visibility |
-| `/setduration` | Slash Command | Set auto-delete minutes for flag reactions |
-| `/help` | Slash Command | Interactive user guide and feature summary |
+See [`SECURITY.md`](SECURITY.md) for full details on:
+- **AES-256-GCM encryption at rest** and **HMAC-SHA256 per-user/per-channel key derivation**.
+- **Header-only API key transport** (`X-Goog-Api-Key`) preventing URL query log exposure.
+- **Secret isolation** across Git and Docker build contexts.
 
 ---
 
-## 🛡️ Anti-Flood & Moderation Guardrails (`/server-settings`)
+## License
 
-To prevent any member from flooding public channels with unwanted threads or chat clutter, server administrators (members with `Manage Server` or `Administrator` permissions) can configure server-wide guardrails using `/server-settings`:
-
-1. **Live Translation Threads (`allow_live_threads`):**
-   - `🛡️ Admins Only (Safe Default)`: Regular members cannot create live threads.
-   - `🚫 Disabled`: Completely disables live threads server-wide.
-   - `👥 Everyone`: Open to all members.
-2. **Public Channel Translations (`allow_public_translations`):**
-   - `🛡️ Admins Only (Safe Default)`: Prevents regular users from posting permanent translations or using `Share to Channel` to clutter the main chat.
-   - `🚫 Disabled`: Enforces 100% private ephemeral translations for everyone.
-3. **Flag Emoji Reaction Replies (`flag_channel_reply_allowed`):**
-   - `🔒 DMs Only (Safe Default)`: Flag reactions are delivered silently via Direct Message with zero channel clutter.
-   - `📢 Public Channel Replies`: Allows channel replies with auto-delete.
-
----
-
-## 🍃 MongoDB Atlas on Google Cloud (L2 Cache & Encrypted Storage)
-
-The bot supports hybrid persistence: local SQLite for offline development and **MongoDB Atlas on Google Cloud** (`europe-west1`) for production high availability:
-
-1. **GCP Marketplace Activation:** Subscribe to **MongoDB Atlas (pay-as-you-go)** in the [GCP Marketplace](https://console.cloud.google.com/marketplace/product/mongodb/mongodb-atlas?project=journeylink-498811).
-2. **Field-Level AES-256-GCM Encryption:** All user preferences, languages, and settings are encrypted at rest before being saved to the database.
-3. **Multi-Tier Coalesced Cache:** Repeated queries or burst reactions are coalesced with Promise deduplication in memory (L1) and persisted with a 14-day TTL in MongoDB Atlas (L2).
-
-Set the following in `.env` or Cloud Run Secret Manager:
-```env
-MONGODB_URI=mongodb+srv://<username>:<password>@<cluster>.gcp.mongodb.net/?retryWrites=true&w=majority
-MONGODB_DB_NAME=dc_translation
-ENCRYPTION_SECRET_KEY=your-32-byte-secret-hex-string
-```
-
----
-
-## 🚀 Automated CI/CD Deployment to GCP
-
-This repository includes a GitHub Actions workflow [`.github/workflows/deploy.yml`](file:///.github/workflows/deploy.yml) that automatically builds the Docker image and deploys it to **Google Cloud Run** in `europe-west1` as an always-on background worker.
-
-### Required GitHub Repository Secrets:
-- `GCP_SA_KEY`: Service Account JSON key (for `github-actions-deploy@journeylink-498811.iam.gserviceaccount.com`).
-- `DISCORD_TOKEN`: Discord Bot Token.
-- `DISCORD_CLIENT_ID`: Discord Application Client ID.
-- `GOOGLE_TRANSLATE_API_KEY`: Google Cloud API Key for Translation.
-- `MONGODB_URI`: MongoDB Atlas connection string.
-- `ENCRYPTION_SECRET_KEY`: 32-byte AES-256-GCM encryption key.
-- `DEEPL_AUTH_KEY`: (Optional) DeepL API Key.
-
+Released under the [MIT License](LICENSE).

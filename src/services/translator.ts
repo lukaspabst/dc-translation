@@ -68,10 +68,13 @@ export const translationService = {
       if (googleApiKey) {
         try {
           const response = await fetch(
-            `https://translation.googleapis.com/language/translate/v2?key=${googleApiKey}`,
+            'https://translation.googleapis.com/language/translate/v2',
             {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': googleApiKey,
+              },
               body: JSON.stringify({
                 q: text,
                 target: targetLanguage,
@@ -189,10 +192,13 @@ export const translationService = {
     if (googleApiKey) {
       try {
         const response = await fetch(
-          `https://translation.googleapis.com/language/translate/v2/detect?key=${googleApiKey}`,
+          'https://translation.googleapis.com/language/translate/v2/detect',
           {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Goog-Api-Key': googleApiKey,
+            },
             body: JSON.stringify({ q: text }),
           }
         );
@@ -215,10 +221,13 @@ export const translationService = {
     if (googleApiKey) {
       try {
         const response = await fetch(
-          `https://translation.googleapis.com/language/translate/v2?key=${googleApiKey}`,
+          'https://translation.googleapis.com/language/translate/v2',
           {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Goog-Api-Key': googleApiKey,
+            },
             body: JSON.stringify({
               q: texts,
               target: targetLanguage,

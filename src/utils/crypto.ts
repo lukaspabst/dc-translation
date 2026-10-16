@@ -1,7 +1,18 @@
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes } from 'crypto';
 
+let warnedMissingSecret = false;
+
 function getEncryptionKey(): Buffer {
-  const secret = process.env.ENCRYPTION_SECRET_KEY || 'journeylink-default-32-byte-master-key-change-in-prod!';
+  const envSecret = process.env.ENCRYPTION_SECRET_KEY?.trim();
+  if (!envSecret && !warnedMissingSecret) {
+    warnedMissingSecret = true;
+    if (process.env.NODE_ENV === 'production') {
+      console.warn(
+        '[Security Warning] ENCRYPTION_SECRET_KEY is not set. Configure a 32-byte secret in .env for production deployments.'
+      );
+    }
+  }
+  const secret = envSecret || 'dc-translation-local-dev-fallback-key';
   return createHash('sha256').update(secret).digest();
 }
 

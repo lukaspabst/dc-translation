@@ -3,6 +3,7 @@ dotenv.config();
 
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import Database from 'better-sqlite3';
 import { MongoClient, MongoClientOptions } from 'mongodb';
 import Redis from 'ioredis';
@@ -32,14 +33,15 @@ async function main() {
       retryWrites: true,
     };
 
+    let tempCertPath: string | null = null;
     if (process.env.MONGODB_CERT_PEM && process.env.MONGODB_CERT_PEM.trim() !== '') {
       const raw = process.env.MONGODB_CERT_PEM.trim();
       const content = raw.includes('BEGIN CERTIFICATE')
         ? raw
         : Buffer.from(raw, 'base64').toString('utf8');
-      const certPath = path.resolve('/tmp/mongodb-cert.pem');
-      fs.writeFileSync(certPath, content, { mode: 0o600 });
-      options.tlsCertificateKeyFile = certPath;
+      tempCertPath = path.join(os.tmpdir(), `mongodb-cert-reset-${process.pid}.pem`);
+      fs.writeFileSync(tempCertPath, content, { mode: 0o600 });
+      options.tlsCertificateKeyFile = tempCertPath;
     } else if (process.env.MONGODB_CERT_PATH && fs.existsSync(process.env.MONGODB_CERT_PATH)) {
       options.tlsCertificateKeyFile = path.resolve(process.env.MONGODB_CERT_PATH);
     }
@@ -69,6 +71,9 @@ async function main() {
       }
     } finally {
       await mongoClient.close();
+      if (tempCertPath && fs.existsSync(tempCertPath)) {
+        fs.unlinkSync(tempCertPath);
+      }
     }
   }
 
