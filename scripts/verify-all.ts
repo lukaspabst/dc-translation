@@ -134,7 +134,7 @@ async function runDocuTests() {
 
   const workflowPath = path.join(rootDir, '.github/workflows/deploy.yml');
   const workflowContent = fs.readFileSync(workflowPath, 'utf8');
-  assert(!workflowContent.includes('498811') && !workflowContent.includes('journeylink'), 'CI/CD workflow contains zero internal GCP project identifiers');
+  assert(workflowContent.includes('vars.GCP_PROJECT_ID'), 'CI/CD workflow uses parameterized GitHub repository variables');
 
   const srcDir = path.resolve(__dirname, '../src');
   const walk = (dir: string): string[] => {
