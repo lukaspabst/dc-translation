@@ -21,7 +21,7 @@
     "sqlite",
     "mongodb"
   ],
-  "author": "Rimuru",
+  "author": "zeN",
   "license": "MIT",
   "type": "commonjs",
   "engines": {
